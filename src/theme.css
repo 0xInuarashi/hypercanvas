@@ -1,0 +1,17 @@
+:root {
+  --color-accent: #7c8fff;
+  --color-accent-dim: #5a5a8a;
+  --color-accent-bg: #1a1a2e;
+  --color-error: #ff6b6b;
+  --color-success: #69db7c;
+  --color-warning: #ffd43b;
+  --color-text: #e0e0e0;
+  --color-text-secondary: #aaa;
+  --color-text-dim: #888;
+  --color-text-muted: #555;
+  --color-surface: #0c0c0c;
+  --color-surface-raised: #161616;
+  --color-border: #2a2a2a;
+  --color-border-light: #3a3a3a;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}

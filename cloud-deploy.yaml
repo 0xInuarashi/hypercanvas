@@ -1,0 +1,162 @@
+#cloud-config
+
+# Optional: add extra SSH keys beyond what Hetzner configures
+# users:
+#   - name: root
+#     ssh_authorized_keys:
+#       - ssh-ed25519 AAAA... your-extra-key
+
+package_update: true
+package_upgrade: true
+
+write_files:
+  # Discord webhook helper script
+  - path: /opt/discord-notify.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      WEBHOOK_URL="https://discord.com/api/webhooks/1483055858790170665/tGMtmYIW44M4wh0XtmYon6rtdwDCG7DtGhxnHBPlG_gUD3mjkGgZ3Mrbce_1_2Rz4_NB"
+      SERVER_IP=$(curl -s https://api.ipify.org)
+      EMOJI="${2:-📦}"
+      curl -s -H "Content-Type: application/json" \
+        -d "{\"content\":\"${EMOJI} **[${SERVER_IP}]** ${1}\"}" \
+        "$WEBHOOK_URL"
+
+  # Post-reboot setup script
+  - path: /opt/post-reboot-setup.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      exec > /var/log/post-reboot-setup.log 2>&1
+      N="/opt/discord-notify.sh"
+      WEBHOOK_URL="https://discord.com/api/webhooks/1483055858790170665/tGMtmYIW44M4wh0XtmYon6rtdwDCG7DtGhxnHBPlG_gUD3mjkGgZ3Mrbce_1_2Rz4_NB"
+      RELEASES_REPO="0xInuarashi/ambiguous-melon-4556-releases"
+      APP_DIR="/opt/hypercanvas"
+      APP_USER="dev"
+
+      # Create passwordless-sudo user
+      $N "Creating user ${APP_USER}..." "👤"
+      useradd -m -s /bin/bash "$APP_USER"
+      echo "${APP_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${APP_USER}
+      chmod 440 /etc/sudoers.d/${APP_USER}
+
+      # Copy root's SSH keys to dev so they can SSH in as dev
+      if [ -d /root/.ssh ]; then
+        mkdir -p /home/${APP_USER}/.ssh
+        cp /root/.ssh/authorized_keys /home/${APP_USER}/.ssh/authorized_keys 2>/dev/null || true
+        chown -R ${APP_USER}:${APP_USER} /home/${APP_USER}/.ssh
+        chmod 700 /home/${APP_USER}/.ssh
+        chmod 600 /home/${APP_USER}/.ssh/authorized_keys 2>/dev/null || true
+      fi
+
+      $N "Server rebooted. Downloading latest release..." "🔄"
+
+      # Get latest release info from public GitHub API
+      RELEASE_JSON=$(curl -s "https://api.github.com/repos/${RELEASES_REPO}/releases/latest")
+
+      TARBALL_URL=$(echo "$RELEASE_JSON" \
+        | grep -o '"browser_download_url": *"[^"]*"' \
+        | head -1 \
+        | cut -d'"' -f4)
+
+      VERSION=$(echo "$RELEASE_JSON" \
+        | grep -o '"tag_name": *"[^"]*"' \
+        | cut -d'"' -f4)
+
+      if [ -z "$TARBALL_URL" ]; then
+        $N "ERROR: Could not find release tarball" "❌"
+        exit 1
+      fi
+
+      $N "Downloading ${VERSION}..." "📥"
+      curl -fsSL "$TARBALL_URL" -o /tmp/release.tar.gz
+
+      # Extract into /opt
+      mkdir -p "$APP_DIR"
+      tar -xzf /tmp/release.tar.gz -C "$APP_DIR"
+      rm /tmp/release.tar.gz
+      chmod +x ${APP_DIR}/hypercanvas
+      chown -R ${APP_USER}:${APP_USER} "$APP_DIR"
+
+      $N "Extracted. Configuring service..." "⚙️"
+
+      # Generate .env — server reads this itself, nothing leaks to child PTYs
+      AUTH_TOKEN=$(openssl rand -hex 32)
+      cat > ${APP_DIR}/.env <<ENVEOF
+      AUTH_TOKEN=${AUTH_TOKEN}
+      PORT=7888
+      ENVEOF
+      sed -i 's/^      //' ${APP_DIR}/.env
+      chown ${APP_USER}:${APP_USER} ${APP_DIR}/.env
+
+      # Install systemd service — runs as dev user, no Environment= lines
+      cat > /etc/systemd/system/hypercanvas.service <<'SVCEOF'
+      [Unit]
+      Description=Hypercanvas
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=dev
+      WorkingDirectory=/opt/hypercanvas
+      ExecStart=/opt/hypercanvas/hypercanvas
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+      SVCEOF
+
+      # Fix indentation — cloud-config adds leading spaces to heredoc content
+      sed -i 's/^      //' /etc/systemd/system/hypercanvas.service
+
+      systemctl daemon-reload
+      systemctl enable --now hypercanvas
+
+      sleep 3
+
+      # Send final summary
+      SVC_STATUS=$(systemctl is-active hypercanvas 2>/dev/null || echo "unknown")
+      LISTEN_PORTS=$(ss -tlnp 2>/dev/null | grep -v "^State" || echo "none detected")
+
+      SERVER_IP=$(curl -s https://api.ipify.org)
+      PAYLOAD=$(jq -n \
+        --arg ip "$SERVER_IP" \
+        --arg ver "$VERSION" \
+        --arg svc "$SVC_STATUS" \
+        --arg env "AUTH_TOKEN=${AUTH_TOKEN}" \
+        --arg ports "$LISTEN_PORTS" \
+        '{content: "✅ **[\($ip)] Setup Complete — \($ver)**\n\nService: `\($svc)`\n```\n\($env)\n```\nListening ports:\n```\n\($ports)\n```\n\nSSH: `ssh dev@\($ip)`"}')
+
+      curl -s -H "Content-Type: application/json" \
+        -d "$PAYLOAD" \
+        "$WEBHOOK_URL"
+
+      systemctl disable post-reboot-setup.service
+
+  - path: /etc/systemd/system/post-reboot-setup.service
+    content: |
+      [Unit]
+      Description=Post-reboot app setup (runs once)
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/opt/post-reboot-setup.sh
+      RemainAfterExit=true
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - /opt/discord-notify.sh "Server created. Starting setup..." "🚀"
+
+  # Only need jq and tree — no Node, no bun, no build tools
+  - apt-get install -y jq tree
+
+  - /opt/discord-notify.sh "Dependencies installed. Rebooting..." "♻️"
+  - systemctl daemon-reload
+  - systemctl enable post-reboot-setup.service
+  - reboot

@@ -1,0 +1,93 @@
+<script module lang="ts">
+  import type { NodeType } from '../types'
+
+  export interface ContextMenuState {
+    x: number
+    y: number
+    targetType: 'node' | 'link' | 'canvas'
+    targetId: string
+    nodeType?: NodeType
+    nodeActive?: boolean
+    nodePersistent?: boolean
+    nodeShowEphemeral?: boolean
+    nodeSessionId?: string
+    nodeSatellitePassword?: string | null
+    worldX?: number
+    worldY?: number
+  }
+</script>
+
+<script lang="ts">
+  import { TOOL_PALETTE } from '../toolPalette'
+  import '../canvas/ContextMenu.css'
+
+  let { menu, onDelete, onSetCommand, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onStopDaemon, onRestartDaemon, onSetDaemonCommand, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onClose }: {
+    menu: ContextMenuState
+    onDelete: (type: 'node' | 'link', id: string) => void
+    onSetCommand: (id: string) => void
+    onToggleActive: (id: string) => void
+    onRestartConsole: (id: string) => void
+    onDuplicateConsole: (id: string) => void
+    onSpawnConsole: (id: string) => void
+    onTogglePersistent: (id: string) => void
+    onProgramMacro: (id: string) => void
+    onRenameMacro: (id: string) => void
+    onStopDaemon: (id: string) => void
+    onRestartDaemon: (id: string) => void
+    onSetDaemonCommand: (id: string) => void
+    onToggleEphemeral: (id: string) => void
+    onShareSatellite: (id: string) => void
+    onRevokeSatellite: (id: string) => void
+    onPlaceTool: (type: NodeType, worldX: number, worldY: number) => void
+    onClose: () => void
+  } = $props()
+</script>
+
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="context-menu-backdrop" onclick={onClose} oncontextmenu={(e) => { e.preventDefault(); onClose() }}></div>
+<div class="context-menu" style="left:{menu.x}px;top:{menu.y}px;">
+  {#if menu.targetType === 'canvas'}
+    <div class="context-menu-label">Add node</div>
+    {#each TOOL_PALETTE as t}
+      <button class="context-menu-item" onclick={() => { onPlaceTool(t.type, menu.worldX!, menu.worldY!); onClose() }}>
+        <span style="margin-right:6px;font-size:10px;opacity:0.7">{t.icon}</span>{t.label}
+      </button>
+    {/each}
+  {/if}
+  {#if menu.targetType === 'node' && menu.nodeType === 'console'}
+    <button class="context-menu-item" onclick={() => { onRestartConsole(menu.targetId); onClose() }}>Restart</button>
+    <button class="context-menu-item" onclick={() => { onToggleActive(menu.targetId); onClose() }}>{menu.nodeActive ? 'Deactivate' : 'Activate'}</button>
+    <button class="context-menu-item" onclick={() => { onTogglePersistent(menu.targetId); onClose() }}>{menu.nodePersistent ? 'Disable persistent' : 'Enable persistent'}</button>
+    <button class="context-menu-item" onclick={() => { onSetCommand(menu.targetId); onClose() }}>Set default command</button>
+    {#if menu.nodePersistent && menu.nodeSessionId}
+      {#if menu.nodeSatellitePassword}
+        <button class="context-menu-item" onclick={() => { onRevokeSatellite(menu.targetId); onClose() }}>Revoke Satellite</button>
+      {:else}
+        <button class="context-menu-item" onclick={() => { onShareSatellite(menu.targetId); onClose() }}>Share as Satellite</button>
+      {/if}
+    {/if}
+    <button class="context-menu-item" onclick={(e) => { onDuplicateConsole(menu.targetId); if (!e.shiftKey) onClose() }}>Duplicate</button>
+    <button class="context-menu-item" onclick={(e) => { onSpawnConsole(menu.targetId); if (!e.shiftKey) onClose() }}>Spawn</button>
+  {/if}
+  {#if menu.targetType === 'node' && menu.nodeType === 'browser'}
+    <button class="context-menu-item" onclick={() => { onToggleActive(menu.targetId); onClose() }}>{menu.nodeActive ? 'Deactivate' : 'Activate'}</button>
+  {/if}
+  {#if menu.targetType === 'node' && menu.nodeType === 'macro'}
+    <button class="context-menu-item" onclick={() => { onProgramMacro(menu.targetId); onClose() }}>Program Macro</button>
+    <button class="context-menu-item" onclick={() => { onRenameMacro(menu.targetId); onClose() }}>Rename</button>
+  {/if}
+  {#if menu.targetType === 'node' && menu.nodeType === 'genie'}
+    <button class="context-menu-item" onclick={() => { onToggleEphemeral(menu.targetId); onClose() }}>{menu.nodeShowEphemeral !== false ? 'Disable bash preview' : 'Enable bash preview'}</button>
+  {/if}
+  {#if menu.targetType === 'node' && menu.nodeType === 'daemon'}
+    {#if menu.nodeActive}
+      <button class="context-menu-item" onclick={() => { onStopDaemon(menu.targetId); onClose() }}>Stop</button>
+    {/if}
+    <button class="context-menu-item" onclick={() => { onRestartDaemon(menu.targetId); onClose() }}>{menu.nodeActive ? 'Restart' : 'Start'}</button>
+    <button class="context-menu-item" onclick={() => { onSetDaemonCommand(menu.targetId); onClose() }}>Set command</button>
+  {/if}
+  {#if menu.targetType === 'node' || menu.targetType === 'link'}
+    <button class="context-menu-item danger" onclick={() => { onDelete(menu.targetType as 'node' | 'link', menu.targetId); onClose() }}>Delete {menu.targetType}</button>
+  {/if}
+</div>

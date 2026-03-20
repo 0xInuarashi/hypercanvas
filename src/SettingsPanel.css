@@ -1,0 +1,229 @@
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 50;
+}
+
+.settings-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  z-index: 51;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 12px;
+  color: #ccc;
+  min-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.settings-title {
+  color: #999;
+  font-size: 13px;
+}
+
+.settings-close {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  font-family: inherit;
+}
+.settings-close:hover {
+  color: #aaa;
+}
+
+.settings-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.settings-categories {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #2a2a2a;
+  padding: 8px 0;
+  min-width: 110px;
+}
+
+.settings-cat {
+  background: none;
+  border: none;
+  color: #777;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.settings-cat:hover {
+  color: #aaa;
+}
+.settings-cat.active {
+  color: #ccc;
+  background: #1e1e1e;
+  border-left: 2px solid #7c8fff;
+}
+
+.settings-content {
+  flex: 1;
+  padding: 12px 14px;
+  overflow-y: auto;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: #888;
+  font-size: 11px;
+}
+
+.settings-reset-all {
+  background: none;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #666;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.settings-reset-all:hover {
+  color: #aaa;
+  border-color: #555;
+}
+
+.settings-size-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-size-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.settings-size-icon {
+  font-size: 10px;
+  opacity: 0.6;
+  width: 14px;
+  text-align: center;
+}
+
+.settings-size-label {
+  width: 72px;
+  color: #aaa;
+  font-size: 11px;
+}
+
+.settings-size-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-size-dim {
+  color: #555;
+  font-size: 10px;
+}
+
+.settings-size-field input {
+  width: 60px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+  outline: none;
+}
+.settings-size-field input:focus {
+  border-color: #555;
+}
+
+.settings-size-reset {
+  background: none;
+  border: none;
+  color: #555;
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.settings-size-reset:hover {
+  color: #aaa;
+}
+
+.settings-keys-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-key-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-key-label {
+  color: #aaa;
+  font-size: 11px;
+}
+
+.settings-key-input {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 6px 8px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.settings-key-input:focus {
+  border-color: #555;
+}
+.settings-key-input::placeholder {
+  color: #444;
+}
+
+.settings-key-clear {
+  background: none;
+  border: none;
+  color: #555;
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  align-self: flex-start;
+}
+.settings-key-clear:hover {
+  color: #aaa;
+}
