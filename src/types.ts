@@ -32,6 +32,8 @@ export interface ViewportState {
   scale: number
 }
 
+export type SnapSlots = Partial<Record<number, ViewportState>>
+
 export interface WorkspaceData {
   id: number
   name: string
@@ -39,6 +41,7 @@ export interface WorkspaceData {
   links: Link[]
   bgColor: string
   viewport: ViewportState
+  snaps?: SnapSlots
 }
 
 export interface WorkspacesState {

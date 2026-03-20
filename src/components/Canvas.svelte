@@ -5,6 +5,7 @@
     moveNode, resizeNode, addLink, deleteNode, deleteLink,
     updateNodeLabel, updateNodeScript, toggleNodeActive, replaceNode,
     addNode, setViewportActions, cancelPendingDestroys, clearActiveTool,
+    recallSnap, deleteSnap,
   } from '../lib/canvasState.svelte'
   import { getNodeSizes } from '../lib/settingsState.svelte'
   import { pushUndo } from '../lib/historyManager.svelte'
@@ -32,6 +33,22 @@
   let linkingActive = false
   let linkFrom: { nodeId: string; side: PortSide } | null = null
   let dragSnapshot: Snapshot | null = null
+  let snapCtx = $state<{ x: number; y: number; slot: number } | null>(null)
+  let vpWidth = $state(0)
+  let vpHeight = $state(0)
+  let snapSlots = $derived((() => {
+    const ws = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
+    if (!ws?.snaps) return []
+    return Object.keys(ws.snaps).map(Number).sort((a, b) => a - b)
+  })())
+  let snapFrames = $derived((() => {
+    const ws = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
+    if (!ws?.snaps || !vpWidth || !vpHeight) return []
+    return Object.entries(ws.snaps).map(([slot, snap]) => {
+      if (!snap) return null
+      return { slot: Number(slot), x: -snap.offsetX / snap.scale, y: -snap.offsetY / snap.scale, w: vpWidth / snap.scale, h: vpHeight / snap.scale }
+    }).filter(Boolean) as { slot: number; x: number; y: number; w: number; h: number }[]
+  })())
 
   let worldEl: HTMLDivElement
   let previewEl: HTMLDivElement
@@ -298,6 +315,8 @@
   class:tool-active={cs.activeTool}
   class:linking={isLinking}
   style:background-color={cs.bgColor}
+  bind:clientWidth={vpWidth}
+  bind:clientHeight={vpHeight}
   onclick={onViewportClick}
   oncontextmenu={onCanvasContextMenu}
 >
@@ -331,6 +350,13 @@
     {/each}
     <div bind:this={previewEl} class="draw-preview" style="display:none;"></div>
     <div bind:this={selectionEl} style="display:none;position:absolute;border:1px dashed #7c8fff;background:rgba(124,143,255,0.08);border-radius:2px;pointer-events:none;"></div>
+    {#each snapFrames as frame (frame.slot)}
+      {@const s = controls.scaleValue}
+      <svg style="position:absolute;left:{frame.x}px;top:{frame.y}px;width:{frame.w}px;height:{frame.h}px;pointer-events:none;z-index:999;overflow:visible;">
+        <rect x="0" y="0" width={frame.w} height={frame.h} rx={3/s} fill="none" stroke="rgba(255,255,255,0.16)" stroke-width={1.5/s} stroke-dasharray="{4/s} {12/s}" />
+        <text x="8" y="16" fill="rgba(255,255,255,0.3)" font-size="12" font-family="'JetBrains Mono','Fira Code',monospace" font-weight="bold">{frame.slot}</text>
+      </svg>
+    {/each}
   </div>
 
   {#if contextMenu}
@@ -339,15 +365,36 @@
 
   <!-- Bottom-right toolbar -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div style="position:absolute;bottom:16px;right:16px;display:flex;gap:8px;z-index:10;align-items:center;">
+  <div style="position:absolute;bottom:16px;right:16px;display:flex;gap:8px;z-index:10;align-items:flex-end;">
     <WorkspaceTabs />
-    <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#161616;border:1px solid #2a2a2a;border-radius:8px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;color:#888;user-select:none;" onclick={(e) => e.stopPropagation()} onpointerdown={(e) => e.stopPropagation()}>
-      <button onclick={() => controls.setScale(controls.scaleValue / 1.25)} style="background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">−</button>
-      <input type="range" min="0.1" max="5" step="0.01" value={controls.scaleValue} oninput={(e) => controls.setScale(parseFloat((e.target as HTMLInputElement).value))} style="width:100px;accent-color:#5a5a8a;cursor:pointer;" />
-      <button onclick={() => controls.setScale(controls.scaleValue * 1.25)} style="background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">+</button>
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <span style="min-width:36px;text-align:right;color:#aaa;cursor:pointer;" onclick={() => controls.setScale(1)} title="Reset to 100%">{Math.round(controls.scaleValue * 100)}%</span>
-      <button onclick={controls.resetView} title="Reset to origin" style="background:none;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:11px;cursor:pointer;padding:2px 6px;line-height:1;margin-left:4px;">⌂</button>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+      {#if snapSlots.length > 0}
+        <div style="display:flex;gap:2px;padding-right:2px;" onclick={(e) => e.stopPropagation()} onpointerdown={(e) => e.stopPropagation()}>
+          {#each snapSlots as slot}
+            <button
+              onclick={() => recallSnap(slot)}
+              oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); snapCtx = { x: e.clientX, y: e.clientY, slot } }}
+              title="Snap {slot} (Ctrl+{slot})"
+              style="background:#161616;border:1px solid #2a2a2a;border-radius:3px;color:#7c8fff;font-size:9px;font-family:'JetBrains Mono','Fira Code',monospace;cursor:pointer;padding:1px 4px;line-height:14px;min-width:16px;text-align:center;"
+            >{slot}</button>
+          {/each}
+        </div>
+      {/if}
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#161616;border:1px solid #2a2a2a;border-radius:8px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;color:#888;user-select:none;" onclick={(e) => e.stopPropagation()} onpointerdown={(e) => e.stopPropagation()}>
+        <button onclick={() => controls.setScale(controls.scaleValue / 1.25)} style="background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">−</button>
+        <input type="range" min="0.1" max="5" step="0.01" value={controls.scaleValue} oninput={(e) => controls.setScale(parseFloat((e.target as HTMLInputElement).value))} style="width:100px;accent-color:#5a5a8a;cursor:pointer;" />
+        <button onclick={() => controls.setScale(controls.scaleValue * 1.25)} style="background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">+</button>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <span style="min-width:36px;text-align:right;color:#aaa;cursor:pointer;" onclick={() => controls.setScale(1)} title="Reset to 100%">{Math.round(controls.scaleValue * 100)}%</span>
+        <button onclick={controls.resetView} title="Reset to origin" style="background:none;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:11px;cursor:pointer;padding:2px 6px;line-height:1;margin-left:4px;">⌂</button>
+      </div>
     </div>
   </div>
+
+  {#if snapCtx}
+    <div class="context-menu-backdrop" onclick={() => snapCtx = null} oncontextmenu={(e) => { e.preventDefault(); snapCtx = null }}></div>
+    <div class="context-menu" style="left:{snapCtx.x}px;top:{snapCtx.y}px;">
+      <button class="context-menu-item danger" onclick={() => { deleteSnap(snapCtx!.slot); snapCtx = null }}>Delete snap {snapCtx.slot}</button>
+    </div>
+  {/if}
 </div>

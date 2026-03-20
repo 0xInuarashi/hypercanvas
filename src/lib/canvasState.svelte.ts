@@ -122,7 +122,8 @@ export function changeBgColor(color: string) { cs.bgColor = color }
 
 function freezeCurrentWorkspace(): WorkspaceData[] {
   const viewport = viewportActions?.getViewport() ?? { offsetX: 0, offsetY: 0, scale: 1 }
-  const currentSnapshot: WorkspaceData = { id: cs.activeWorkspaceId, name: cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)?.name ?? String(cs.activeWorkspaceId), nodes: cs.nodes, links: cs.links, bgColor: cs.bgColor, viewport }
+  const existing = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
+  const currentSnapshot: WorkspaceData = { id: cs.activeWorkspaceId, name: existing?.name ?? String(cs.activeWorkspaceId), nodes: cs.nodes, links: cs.links, bgColor: cs.bgColor, viewport, snaps: existing?.snaps }
   return cs.workspaces.map((w) => w.id === cs.activeWorkspaceId ? currentSnapshot : w)
 }
 
@@ -172,11 +173,35 @@ export function restoreSnapshot(s: Snapshot) {
   if (s.viewport && viewportActions) viewportActions.setViewport(s.viewport)
 }
 
+// --- Snaps (viewport bookmarks) ---
+
+export function saveSnap(slot: number) {
+  if (!viewportActions) return
+  const ws = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
+  if (!ws) return
+  const snaps = { ...ws.snaps, [slot]: viewportActions.getViewport() }
+  cs.workspaces = cs.workspaces.map((w) => w.id === cs.activeWorkspaceId ? { ...w, snaps } : w)
+}
+
+export function recallSnap(slot: number) {
+  const snap = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)?.snaps?.[slot]
+  if (snap && viewportActions) viewportActions.setViewport(snap)
+}
+
+export function deleteSnap(slot: number) {
+  const ws = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
+  if (!ws?.snaps) return
+  const { [slot]: _, ...rest } = ws.snaps
+  const snaps = Object.keys(rest).length > 0 ? rest : undefined
+  cs.workspaces = cs.workspaces.map((w) => w.id === cs.activeWorkspaceId ? { ...w, snaps } : w)
+}
+
 // --- Persist ---
 
 export function persistState() {
   const viewport = viewportActions?.getViewport() ?? { offsetX: 0, offsetY: 0, scale: 1 }
-  const currentWs: WorkspaceData = { id: cs.activeWorkspaceId, name: cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)?.name ?? String(cs.activeWorkspaceId), nodes: cs.nodes.map(stripRuntimeState), links: cs.links, bgColor: cs.bgColor, viewport }
+  const existingWs = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
+  const currentWs: WorkspaceData = { id: cs.activeWorkspaceId, name: existingWs?.name ?? String(cs.activeWorkspaceId), nodes: cs.nodes.map(stripRuntimeState), links: cs.links, bgColor: cs.bgColor, viewport, snaps: existingWs?.snaps }
   const allWorkspaces = cs.workspaces.map((w) => w.id === cs.activeWorkspaceId ? currentWs : w)
   saveState({ version: 2, activeWorkspaceId: cs.activeWorkspaceId, nextWorkspaceId: cs.nextWorkspaceId, nextId, nextLinkId, workspaces: allWorkspaces })
 }

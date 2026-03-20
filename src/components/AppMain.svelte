@@ -4,7 +4,7 @@
   import HistoryPanel from './HistoryPanel.svelte'
   import SettingsPanel from './SettingsPanel.svelte'
   import ScriptApprovalModal from './ScriptApprovalModal.svelte'
-  import { cs, persistState, addNode, setNodeSizesGetter } from '../lib/canvasState.svelte'
+  import { cs, persistState, addNode, setNodeSizesGetter, saveSnap, recallSnap } from '../lib/canvasState.svelte'
   import { undo, redo } from '../lib/historyManager.svelte'
   import { ss, setShowSettings, getNodeSizes } from '../lib/settingsState.svelte'
   import { parseUrlScript } from '../lib/urlScript'
@@ -35,6 +35,13 @@
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo() }
+      const digitMatch = e.code.match(/^Digit(\d)$/)
+      if (digitMatch && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        const slot = parseInt(digitMatch[1])
+        if (e.shiftKey) saveSnap(slot)
+        else recallSnap(slot)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
