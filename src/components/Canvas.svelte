@@ -363,38 +363,40 @@
     <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onClose={() => contextMenu = null} />
   {/if}
 
-  <!-- Bottom-right toolbar -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div style="position:absolute;bottom:16px;right:16px;display:flex;gap:8px;z-index:10;align-items:flex-end;">
-    <WorkspaceTabs />
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-      {#if snapSlots.length > 0}
-        <div style="display:flex;gap:2px;padding-right:2px;" onclick={(e) => e.stopPropagation()} onpointerdown={(e) => e.stopPropagation()}>
-          {#each snapSlots as slot}
-            <button
-              onclick={() => recallSnap(slot)}
-              oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); snapCtx = { x: e.clientX, y: e.clientY, slot } }}
-              title="Snap {slot} (Ctrl+{slot})"
-              style="background:#161616;border:1px solid #2a2a2a;border-radius:3px;color:#7c8fff;font-size:9px;font-family:'JetBrains Mono','Fira Code',monospace;cursor:pointer;padding:1px 4px;line-height:14px;min-width:16px;text-align:center;"
-            >{slot}</button>
-          {/each}
-        </div>
-      {/if}
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#161616;border:1px solid #2a2a2a;border-radius:8px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;color:#888;user-select:none;" onclick={(e) => e.stopPropagation()} onpointerdown={(e) => e.stopPropagation()}>
-        <button onclick={() => controls.setScale(controls.scaleValue / 1.25)} style="background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">−</button>
-        <input type="range" min="0.1" max="5" step="0.01" value={controls.scaleValue} oninput={(e) => controls.setScale(parseFloat((e.target as HTMLInputElement).value))} style="width:100px;accent-color:#5a5a8a;cursor:pointer;" />
-        <button onclick={() => controls.setScale(controls.scaleValue * 1.25)} style="background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">+</button>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <span style="min-width:36px;text-align:right;color:#aaa;cursor:pointer;" onclick={() => controls.setScale(1)} title="Reset to 100%">{Math.round(controls.scaleValue * 100)}%</span>
-        <button onclick={controls.resetView} title="Reset to origin" style="background:none;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:11px;cursor:pointer;padding:2px 6px;line-height:1;margin-left:4px;">⌂</button>
+
+</div>
+
+<!-- Bottom-right toolbar (outside viewport to avoid transform artifacts) -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div style="position:fixed;bottom:16px;right:16px;display:flex;gap:8px;z-index:10;align-items:flex-end;">
+  <WorkspaceTabs />
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+    {#if snapSlots.length > 0}
+      <div style="display:flex;gap:2px;padding-right:2px;" onclick={(e) => e.stopPropagation()} onpointerdown={(e) => e.stopPropagation()}>
+        {#each snapSlots as slot}
+          <button
+            onclick={() => recallSnap(slot)}
+            oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); snapCtx = { x: e.clientX, y: e.clientY, slot } }}
+            title="Snap {slot} (Ctrl+{slot})"
+            style="background:#161616;border:1px solid #2a2a2a;border-radius:3px;color:#7c8fff;font-size:9px;font-family:'JetBrains Mono','Fira Code',monospace;cursor:pointer;padding:1px 4px;line-height:14px;min-width:16px;text-align:center;"
+          >{slot}</button>
+        {/each}
       </div>
+    {/if}
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:#161616;border:1px solid #2a2a2a;border-radius:8px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;color:#888;user-select:none;" onclick={(e) => e.stopPropagation()} onpointerdown={(e) => e.stopPropagation()}>
+      <button onclick={() => controls.setScale(controls.scaleValue / 1.25)} style="background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">−</button>
+      <input type="range" min="0.1" max="5" step="0.01" value={controls.scaleValue} oninput={(e) => controls.setScale(parseFloat((e.target as HTMLInputElement).value))} style="width:100px;accent-color:#5a5a8a;cursor:pointer;" />
+      <button onclick={() => controls.setScale(controls.scaleValue * 1.25)} style="background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">+</button>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <span style="min-width:36px;text-align:right;color:#aaa;cursor:pointer;" onclick={() => controls.setScale(1)} title="Reset to 100%">{Math.round(controls.scaleValue * 100)}%</span>
+      <button onclick={controls.resetView} title="Reset to origin" style="background:none;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:11px;cursor:pointer;padding:2px 6px;line-height:1;margin-left:4px;">⌂</button>
     </div>
   </div>
-
-  {#if snapCtx}
-    <div class="context-menu-backdrop" onclick={() => snapCtx = null} oncontextmenu={(e) => { e.preventDefault(); snapCtx = null }}></div>
-    <div class="context-menu" style="left:{snapCtx.x}px;top:{snapCtx.y}px;">
-      <button class="context-menu-item danger" onclick={() => { deleteSnap(snapCtx!.slot); snapCtx = null }}>Delete snap {snapCtx.slot}</button>
-    </div>
-  {/if}
 </div>
+
+{#if snapCtx}
+  <div class="context-menu-backdrop" onclick={() => snapCtx = null} oncontextmenu={(e) => { e.preventDefault(); snapCtx = null }}></div>
+  <div class="context-menu" style="left:{snapCtx.x}px;top:{snapCtx.y}px;">
+    <button class="context-menu-item danger" onclick={() => { deleteSnap(snapCtx!.slot); snapCtx = null }}>Delete snap {snapCtx.slot}</button>
+  </div>
+{/if}
