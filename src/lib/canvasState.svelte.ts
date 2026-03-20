@@ -4,9 +4,7 @@ import type { CanvasNode, Link, NodeType, PortSide, ViewportState, WorkspaceData
 export const DEFAULT_SIZES: Record<NodeType, { w: number; h: number }> = {
   console: { w: 600, h: 400 },
   macro: { w: 180, h: 60 },
-  aifio: { w: 400, h: 500 },
-  daemon: { w: 500, h: 300 },
-  memo: { w: 300, h: 250 },
+memo: { w: 300, h: 250 },
   files: { w: 300, h: 400 },
   genie: { w: 450, h: 550 },
   sketchpad: { w: 500, h: 400 },
@@ -16,7 +14,7 @@ export const DEFAULT_SIZES: Record<NodeType, { w: number; h: number }> = {
 const STORAGE_KEY = 'hypercanvas'
 
 export function stripRuntimeState(node: CanvasNode): CanvasNode {
-  const { daemonStatus: _, active, satellitePassword: __, ...rest } = node
+  const { active, satellitePassword: _, ...rest } = node
   const shouldActivate = node.type === 'console' && node.sessionId
   return { ...rest, active: shouldActivate ? true : false }
 }
@@ -89,7 +87,7 @@ export function resizeNode(id: string, x: number, y: number, width: number, heig
 
 export function deleteNode(id: string) {
   const node = cs.nodes.find((n) => n.id === id)
-  if (node?.sessionId && (node.type === 'daemon' || node.type === 'console')) {
+  if (node?.sessionId && node.type === 'console') {
     if (node.type === 'console' && node.persistent) {
       const sessionId = node.sessionId
       const timer = setTimeout(() => { pendingDestroys.delete(sessionId); fetch(`${HTTP_URL}/daemon/destroy`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId }) }).catch((err) => console.warn('daemon destroy failed:', err)) }, 5000)

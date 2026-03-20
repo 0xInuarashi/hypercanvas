@@ -2,9 +2,7 @@
   import type { CanvasNode as CanvasNodeType, PortSide } from '../types'
   import ConsoleWidget from '../widgets/ConsoleWidget.svelte'
   import MacroWidget from '../widgets/MacroWidget.svelte'
-  import AifioWidget from '../widgets/AifioWidget.svelte'
-  import DaemonWidget from '../widgets/DaemonWidget.svelte'
-  import MemoWidget from '../widgets/MemoWidget.svelte'
+import MemoWidget from '../widgets/MemoWidget.svelte'
   import FileBrowserWidget from '../widgets/FileBrowserWidget.svelte'
   import GenieWidget from '../widgets/GenieWidget.svelte'
   import SketchpadWidget from '../widgets/SketchpadWidget.svelte'
@@ -180,10 +178,6 @@
       <ConsoleWidget active={!!node.active} defaultCommand={node.label} persistent={!!node.persistent} sessionId={node.sessionId} satellitePassword={node.satellitePassword} onSessionCreated={(sid) => onReplaceNode(node.id, { sessionId: sid })} onOpenBrowser={onOpenBrowser ? (url) => onOpenBrowser(node.id, url) : undefined} />
     {:else if node.type === 'macro'}
       <MacroWidget label={node.label} script={node.script || ''} onBashStart={onBashStart ? (cmd) => onBashStart(node.id, cmd) : undefined} onBashOutput={onBashOutput} onBashDone={onBashDone} />
-    {:else if node.type === 'aifio'}
-      <AifioWidget nodeId={node.id} onReplaceSelf={onReplaceNode} />
-    {:else if node.type === 'daemon'}
-      <DaemonWidget command={node.command || ''} sessionId={node.sessionId} daemonStatus={node.daemonStatus} onSessionCreated={(sid) => onReplaceNode(node.id, { sessionId: sid })} onStatusChange={(status) => onReplaceNode(node.id, { daemonStatus: status })} />
     {:else if node.type === 'memo'}
       <MemoWidget label={node.label} onUpdateLabel={(label) => onUpdateLabel(node.id, label)} />
     {:else if node.type === 'files'}

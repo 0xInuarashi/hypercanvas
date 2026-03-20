@@ -21,7 +21,7 @@
   import { TOOL_PALETTE } from '../toolPalette'
   import '../canvas/ContextMenu.css'
 
-  let { menu, onDelete, onSetCommand, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onStopDaemon, onRestartDaemon, onSetDaemonCommand, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onClose }: {
+  let { menu, onDelete, onSetCommand, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onClose }: {
     menu: ContextMenuState
     onDelete: (type: 'node' | 'link', id: string) => void
     onSetCommand: (id: string) => void
@@ -32,10 +32,7 @@
     onTogglePersistent: (id: string) => void
     onProgramMacro: (id: string) => void
     onRenameMacro: (id: string) => void
-    onStopDaemon: (id: string) => void
-    onRestartDaemon: (id: string) => void
-    onSetDaemonCommand: (id: string) => void
-    onToggleEphemeral: (id: string) => void
+onToggleEphemeral: (id: string) => void
     onShareSatellite: (id: string) => void
     onRevokeSatellite: (id: string) => void
     onPlaceTool: (type: NodeType, worldX: number, worldY: number) => void
@@ -79,13 +76,6 @@
   {/if}
   {#if menu.targetType === 'node' && menu.nodeType === 'genie'}
     <button class="context-menu-item" onclick={() => { onToggleEphemeral(menu.targetId); onClose() }}>{menu.nodeShowEphemeral !== false ? 'Disable bash preview' : 'Enable bash preview'}</button>
-  {/if}
-  {#if menu.targetType === 'node' && menu.nodeType === 'daemon'}
-    {#if menu.nodeActive}
-      <button class="context-menu-item" onclick={() => { onStopDaemon(menu.targetId); onClose() }}>Stop</button>
-    {/if}
-    <button class="context-menu-item" onclick={() => { onRestartDaemon(menu.targetId); onClose() }}>{menu.nodeActive ? 'Restart' : 'Start'}</button>
-    <button class="context-menu-item" onclick={() => { onSetDaemonCommand(menu.targetId); onClose() }}>Set command</button>
   {/if}
   {#if menu.targetType === 'node' || menu.targetType === 'link'}
     <button class="context-menu-item danger" onclick={() => { onDelete(menu.targetType as 'node' | 'link', menu.targetId); onClose() }}>Delete {menu.targetType}</button>

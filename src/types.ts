@@ -1,4 +1,4 @@
-export type NodeType = 'console' | 'macro' | 'aifio' | 'daemon' | 'memo' | 'files' | 'genie' | 'sketchpad' | 'browser'
+export type NodeType = 'console' | 'macro' | 'memo' | 'files' | 'genie' | 'sketchpad' | 'browser'
 
 export interface CanvasNode {
   id: string
@@ -10,10 +10,8 @@ export interface CanvasNode {
   label: string
   active?: boolean
   script?: string
-  command?: string
   persistent?: boolean
   sessionId?: string
-  daemonStatus?: 'running' | 'stopped' | 'error' | 'disconnected'
   showEphemeral?: boolean
   satellitePassword?: string | null
 }

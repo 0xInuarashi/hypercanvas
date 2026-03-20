@@ -6,7 +6,6 @@
 
   const BG_COLORS = [
     '#0a0a0a', '#1e1e1e', '#0d1117', '#1a1a2e', '#1a0a0a',
-    '#e8e4df', '#f0f0f0', '#dce4ed', '#e4dce8', '#d9e6d9',
   ]
 
   let collapsed = $state(false)

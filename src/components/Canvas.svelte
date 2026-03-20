@@ -137,7 +137,7 @@
 
   function onNodeContextMenu(nodeId: string, e: MouseEvent) {
     const node = cs.nodes.find((n) => n.id === nodeId)
-    const isActive = node?.type === 'daemon' ? node?.daemonStatus === 'running' : node?.active
+    const isActive = node?.active
     contextMenu = { x: e.clientX, y: e.clientY, targetType: 'node', targetId: nodeId, nodeType: node?.type, nodeActive: isActive, nodePersistent: node?.persistent, nodeShowEphemeral: node?.showEphemeral, nodeSessionId: node?.sessionId, nodeSatellitePassword: node?.satellitePassword }
     selectedNodeIds = new Set([nodeId]); selectedLinkId = null
   }
@@ -232,35 +232,6 @@
     const node = cs.nodes.find(n => n.id === id)
     const name = window.prompt('Rename macro:', node?.label || '')
     if (name !== null) { pushUndo('Rename macro'); updateNodeLabel(id, name.trim()) }
-  }
-
-  function handleStopDaemon(id: string) {
-    const node = cs.nodes.find(n => n.id === id)
-    if (!node?.sessionId) return
-    fetch(`${HTTP_URL}/daemon/stop`, {
-      method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ sessionId: node.sessionId }),
-    }).catch(() => {})
-  }
-
-  function handleRestartDaemon(id: string) {
-    const node = cs.nodes.find(n => n.id === id)
-    if (node?.sessionId) {
-      fetch(`${HTTP_URL}/daemon/restart`, {
-        method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ sessionId: node.sessionId }),
-      }).then(res => {
-        if (!res.ok) replaceNode(id, { sessionId: undefined, daemonStatus: undefined })
-      }).catch(() => replaceNode(id, { sessionId: undefined, daemonStatus: undefined }))
-    } else if (node?.command) {
-      replaceNode(id, { sessionId: undefined, daemonStatus: undefined })
-    }
-  }
-
-  function handleSetDaemonCommand(id: string) {
-    const node = cs.nodes.find(n => n.id === id)
-    const cmd = window.prompt('Set daemon command:', node?.command || '')
-    if (cmd !== null) { pushUndo('Set daemon command'); replaceNode(id, { command: cmd.trim() }) }
   }
 
   function handlePlaceTool(type: NodeType, worldX: number, worldY: number) {
@@ -363,7 +334,7 @@
   </div>
 
   {#if contextMenu}
-    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onStopDaemon={handleStopDaemon} onRestartDaemon={handleRestartDaemon} onSetDaemonCommand={handleSetDaemonCommand} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onClose={() => contextMenu = null} />
+    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onClose={() => contextMenu = null} />
   {/if}
 
   <!-- Bottom-right toolbar -->
