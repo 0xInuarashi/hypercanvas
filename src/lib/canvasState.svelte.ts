@@ -115,7 +115,17 @@ export function deleteLink(id: string) { cs.links = cs.links.filter((l) => l.id 
 export function updateNodeLabel(id: string, label: string) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, label } : n)) }
 export function updateNodeScript(id: string, script: string) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, script } : n)) }
 export function replaceNode(id: string, newProps: Partial<CanvasNode>) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, ...newProps } : n)) }
-export function toggleNodeActive(id: string, active: boolean) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, active } : n)) }
+export function toggleNodeActive(id: string, active: boolean) {
+  if (!active) {
+    const node = cs.nodes.find((n) => n.id === id)
+    if (node?.type === 'console' && node.sessionId) {
+      fetch(`${HTTP_URL}/daemon/destroy`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: node.sessionId }) }).catch((err) => console.warn('daemon destroy failed:', err))
+      cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, active, sessionId: undefined } : n))
+      return
+    }
+  }
+  cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, active } : n))
+}
 export function changeBgColor(color: string) { cs.bgColor = color }
 
 // --- Workspaces ---
