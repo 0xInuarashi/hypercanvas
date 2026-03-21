@@ -15,14 +15,15 @@ import type { ServerWebSocket, Subprocess } from 'bun'
 // Configuration
 // ---------------------------------------------------------------------------
 
-// import.meta.dir = directory of this source file (server/) in dev mode,
-// or the directory of the compiled binary.  Detect which case by checking
-// for package.json — present in the project root but not in server/.
+// In dev mode, import.meta.dir = directory of this source file (server/).
+// In compiled binaries, import.meta.dir = /$bunfs/root (virtual FS), so
+// we fall back to dirname(process.execPath) for the real binary location.
 const SCRIPT_DIR = import.meta.dir
+const EXEC_DIR = dirname(process.execPath)
 const BASE_DIR = existsSync(join(SCRIPT_DIR, 'package.json'))
-  ? SCRIPT_DIR
-  : existsSync(join(SCRIPT_DIR, 'dist', 'index.html'))
-    ? SCRIPT_DIR
+  ? SCRIPT_DIR                                        // dev: running from server/ subdir
+  : existsSync(join(EXEC_DIR, 'dist', 'index.html'))
+    ? EXEC_DIR                                        // compiled binary next to dist/
     : resolve(SCRIPT_DIR, '..')
 const ENV_PATH = join(BASE_DIR, '.env')
 if (existsSync(ENV_PATH)) {
