@@ -21,7 +21,9 @@ import type { ServerWebSocket, Subprocess } from 'bun'
 const SCRIPT_DIR = import.meta.dir
 const BASE_DIR = existsSync(join(SCRIPT_DIR, 'package.json'))
   ? SCRIPT_DIR
-  : resolve(SCRIPT_DIR, '..')
+  : existsSync(join(SCRIPT_DIR, 'dist', 'index.html'))
+    ? SCRIPT_DIR
+    : resolve(SCRIPT_DIR, '..')
 const ENV_PATH = join(BASE_DIR, '.env')
 if (existsSync(ENV_PATH)) {
   for (const line of readFileSync(ENV_PATH, 'utf-8').split('\n')) {
