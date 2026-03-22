@@ -8,7 +8,7 @@
 import { execSync } from 'node:child_process'
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from 'node:fs'
-import { join, extname, dirname, resolve } from 'node:path'
+import { join, extname, dirname, resolve, basename } from 'node:path'
 import type { ServerWebSocket, Subprocess } from 'bun'
 
 // ---------------------------------------------------------------------------
@@ -25,13 +25,32 @@ const BASE_DIR = existsSync(join(SCRIPT_DIR, 'package.json'))
   : existsSync(join(EXEC_DIR, 'dist', 'index.html'))
     ? EXEC_DIR                                        // compiled binary next to dist/
     : resolve(SCRIPT_DIR, '..')
-const ENV_PATH = join(BASE_DIR, '.env')
-if (existsSync(ENV_PATH)) {
-  for (const line of readFileSync(ENV_PATH, 'utf-8').split('\n')) {
-    const match = line.match(/^([A-Z_]+)=(.*)$/)
-    if (match && !process.env[match[1]]) process.env[match[1]] = match[2]
+// Detect install root for versioned deployments:
+//   /opt/hypercanvas/versions/v0.0.5/  →  INSTALL_ROOT = /opt/hypercanvas/
+//   /opt/hypercanvas/                  →  INSTALL_ROOT = /opt/hypercanvas/
+const INSTALL_ROOT = basename(dirname(BASE_DIR)) === 'versions'
+  ? resolve(BASE_DIR, '..', '..')
+  : BASE_DIR
+
+// Load .env — check BASE_DIR first, then INSTALL_ROOT (shared across versions)
+const ENV_CANDIDATES = INSTALL_ROOT !== BASE_DIR
+  ? [join(BASE_DIR, '.env'), join(INSTALL_ROOT, '.env')]
+  : [join(BASE_DIR, '.env')]
+for (const envFile of ENV_CANDIDATES) {
+  if (existsSync(envFile)) {
+    for (const line of readFileSync(envFile, 'utf-8').split('\n')) {
+      const match = line.match(/^([A-Z_]+)=(.*)$/)
+      if (match && !process.env[match[1]]) process.env[match[1]] = match[2]
+    }
+    break
   }
 }
+
+// Version
+const VERSION_FILE = join(BASE_DIR, 'VERSION')
+const CURRENT_VERSION = existsSync(VERSION_FILE)
+  ? readFileSync(VERSION_FILE, 'utf-8').trim()
+  : 'dev'
 
 const PORT = parseInt(process.env.PORT || '7888', 10)
 const HOST = process.env.HOST || '0.0.0.0'
@@ -670,7 +689,7 @@ const server = Bun.serve<WsData>({
 
     // -- Auth gate for API endpoints --
     if (AUTH_TOKEN) {
-      const API_PATHS = ['/tree', '/find-dir', '/ls', '/exec', '/read-file', '/write-file', '/fetch', '/daemon', '/browse-proxy', '/satellite']
+      const API_PATHS = ['/tree', '/find-dir', '/ls', '/exec', '/read-file', '/write-file', '/fetch', '/daemon', '/browse-proxy', '/satellite', '/update']
       if (API_PATHS.some(p => url.pathname.startsWith(p))) {
         const authHeader = req.headers.get('authorization') || ''
         const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
@@ -1001,6 +1020,55 @@ const server = Bun.serve<WsData>({
         proxyPort: p.proxyPort, targetPort: p.targetPort, lastAccess: p.lastAccess,
       }))
       return json(list)
+    }
+
+    // -- /update --
+    if (req.method === 'GET' && url.pathname === '/update/version') {
+      return json({ version: CURRENT_VERSION })
+    }
+
+    if (req.method === 'POST' && url.pathname === '/update') {
+      try {
+        const body = await req.json()
+        const version = body.version as string
+        const tarballUrl = body.tarballUrl as string
+        if (!version || !tarballUrl) return json({ error: 'Missing version or tarballUrl' }, 400)
+
+        const versionsDir = join(INSTALL_ROOT, 'versions')
+        const versionDir = join(versionsDir, version)
+        const currentLink = join(INSTALL_ROOT, 'current')
+
+        // Download tarball
+        const tmpPath = `/tmp/hypercanvas-${version}.tar.gz`
+        const dlResp = await fetch(tarballUrl)
+        if (!dlResp.ok) return json({ error: `Download failed: ${dlResp.status}` }, 502)
+        await Bun.write(tmpPath, dlResp)
+
+        // Extract to versioned directory
+        execSync(`mkdir -p ${JSON.stringify(versionDir)}`)
+        execSync(`tar -xzf ${JSON.stringify(tmpPath)} -C ${JSON.stringify(versionDir)}`)
+        execSync(`chmod +x ${JSON.stringify(join(versionDir, 'hypercanvas'))}`)
+        execSync(`rm -f ${JSON.stringify(tmpPath)}`)
+
+        // Update current symlink (relative so it works if the tree moves)
+        execSync(`ln -sfn ${JSON.stringify(join('versions', version))} ${JSON.stringify(currentLink)}`)
+
+        // First-time migration: update systemd to use the current symlink
+        const symlinkExec = join(INSTALL_ROOT, 'current', 'hypercanvas')
+        try {
+          const svcFile = execSync('cat /etc/systemd/system/hypercanvas.service', { encoding: 'utf-8' })
+          if (!svcFile.includes('/current/hypercanvas')) {
+            execSync(`sudo sed -i 's|ExecStart=.*|ExecStart=${symlinkExec}|' /etc/systemd/system/hypercanvas.service`)
+            execSync('sudo systemctl daemon-reload')
+          }
+        } catch { /* sudo not available — user needs to update service manually */ }
+
+        // Respond, then exit so systemd restarts with the new version
+        setTimeout(() => process.exit(0), 1000)
+        return json({ ok: true, version, message: `Updated to ${version}. Restarting...` })
+      } catch (err) {
+        return json({ error: err instanceof Error ? err.message : 'Update failed' }, 500)
+      }
     }
 
     // -- Serve built frontend (production) --

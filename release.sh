@@ -26,6 +26,9 @@ fi
 
 echo "==> Building release ${VERSION}"
 
+# Write VERSION file for builds to pick up
+echo "$VERSION" > VERSION
+
 # Build frontend + binary
 echo "==> Building frontend..."
 bun run build
@@ -36,7 +39,7 @@ bun run build:bin
 # Package
 TARBALL="hypercanvas-linux-x64.tar.gz"
 echo "==> Packaging ${TARBALL}..."
-tar -czf "$TARBALL" hypercanvas dist/
+tar -czf "$TARBALL" hypercanvas dist/ VERSION
 
 SIZE=$(du -h "$TARBALL" | cut -f1)
 echo "==> Tarball: ${TARBALL} (${SIZE})"
@@ -60,5 +63,5 @@ EOF
 )"
 
 # Cleanup
-rm -f "$TARBALL" hypercanvas
+rm -f "$TARBALL" hypercanvas VERSION
 echo "==> Done! Release ${VERSION} published to ${RELEASES_REPO}"

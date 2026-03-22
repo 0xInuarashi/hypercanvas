@@ -9,15 +9,112 @@
     setShowSettings,
   } from '../lib/settingsState.svelte'
   import { getPrimaryModel, getFallbackModel } from '../services/openrouter'
+  import { HTTP_URL, authHeaders } from '../config'
   import type { NodeType } from '../types'
   import '../SettingsPanel.css'
 
-  type Category = 'keys' | 'nodeSizes'
+  type Category = 'keys' | 'nodeSizes' | 'updates'
   let category = $state<Category>('keys')
 
   let localOpenrouterKey = $state(ss.openrouterKey)
   let localPrimaryModel = $state(ss.primaryModel)
   let localFallbackModel = $state(ss.fallbackModel)
+
+  // Update state
+  const RELEASES_REPO = '0xInuarashi/ambiguous-melon-4556-releases'
+  const currentVersion = __APP_VERSION__
+  let latestVersion = $state<string | null>(null)
+  let latestTarballUrl = $state<string | null>(null)
+  let checking = $state(false)
+  let updating = $state(false)
+  let updateStatus = $state<string | null>(null)
+
+  $effect(() => {
+    if (category === 'updates' && !latestVersion && !checking) {
+      checkForUpdates()
+    }
+  })
+
+  async function checkForUpdates() {
+    checking = true
+    updateStatus = null
+    try {
+      const resp = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`)
+      if (!resp.ok) throw new Error(`GitHub API: ${resp.status}`)
+      const data = await resp.json()
+      latestVersion = data.tag_name
+      latestTarballUrl = data.assets?.[0]?.browser_download_url || null
+      if (currentVersion === 'dev') {
+        updateStatus = `Latest release: ${latestVersion}`
+      } else if (latestVersion === currentVersion) {
+        updateStatus = 'Up to date'
+      }
+    } catch (err) {
+      updateStatus = `Check failed: ${(err as Error).message}`
+    } finally {
+      checking = false
+    }
+  }
+
+  async function installUpdate() {
+    if (!latestVersion || !latestTarballUrl) return
+    updating = true
+    updateStatus = 'Downloading and installing...'
+    try {
+      const resp = await fetch(`${HTTP_URL}/update`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ version: latestVersion, tarballUrl: latestTarballUrl }),
+      })
+      const data = await resp.json()
+      if (data.ok) {
+        updateStatus = 'Installed. Restarting server...'
+        waitForRestart()
+      } else {
+        updateStatus = `Failed: ${data.error}`
+        updating = false
+      }
+    } catch {
+      // Server likely exited mid-response — expected
+      updateStatus = 'Restarting server...'
+      waitForRestart()
+    }
+  }
+
+  function waitForRestart() {
+    let attempts = 0
+    const poll = setInterval(async () => {
+      attempts++
+      if (attempts > 30) {
+        clearInterval(poll)
+        updateStatus = 'Server did not come back. Check manually.'
+        updating = false
+        return
+      }
+      try {
+        const resp = await fetch(`${HTTP_URL}/update/version`, {
+          headers: authHeaders(),
+        })
+        if (resp.ok) {
+          const data = await resp.json()
+          clearInterval(poll)
+          if (data.version === latestVersion) {
+            updateStatus = `Running ${data.version}`
+            setTimeout(() => location.reload(), 1000)
+          } else {
+            updateStatus = `Server restarted (${data.version}) but expected ${latestVersion}`
+            updating = false
+          }
+        }
+      } catch { /* server still restarting */ }
+    }, 2000)
+  }
+
+  const updateAvailable = $derived(
+    latestVersion != null &&
+    currentVersion !== 'dev' &&
+    latestVersion !== currentVersion
+  )
 
   function close() { setShowSettings(false) }
 
@@ -58,6 +155,7 @@
     <div class="settings-categories">
       <button class="settings-cat" class:active={category === 'keys'} onclick={() => category = 'keys'}>Keys</button>
       <button class="settings-cat" class:active={category === 'nodeSizes'} onclick={() => category = 'nodeSizes'}>Node Sizes</button>
+      <button class="settings-cat" class:active={category === 'updates'} onclick={() => category = 'updates'}>Updates</button>
     </div>
     <div class="settings-content">
       {#if category === 'keys'}
@@ -151,6 +249,37 @@
               {/if}
             </div>
           {/each}
+        </div>
+      {/if}
+      {#if category === 'updates'}
+        <div class="settings-section-header">
+          <span>Software updates</span>
+        </div>
+        <div class="settings-update">
+          <div class="settings-update-row">
+            <span class="settings-update-label">Current</span>
+            <span class="settings-update-value">{currentVersion}</span>
+          </div>
+          {#if latestVersion}
+            <div class="settings-update-row">
+              <span class="settings-update-label">Latest</span>
+              <span class="settings-update-value">{latestVersion}</span>
+            </div>
+          {/if}
+          <div class="settings-update-actions">
+            {#if updateAvailable && !updating}
+              <button class="settings-update-btn install" onclick={installUpdate}>
+                Update to {latestVersion}
+              </button>
+            {:else if !updating}
+              <button class="settings-update-btn" onclick={checkForUpdates} disabled={checking}>
+                {checking ? 'Checking...' : 'Check for updates'}
+              </button>
+            {/if}
+          </div>
+          {#if updateStatus}
+            <div class="settings-update-status">{updateStatus}</div>
+          {/if}
         </div>
       {/if}
     </div>
