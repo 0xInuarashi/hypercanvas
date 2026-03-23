@@ -30,6 +30,7 @@
   let contextMenu = $state<ContextMenuState | null>(null)
   let ephemeralConsoles = $state<EphemeralState[]>([])
   let fullscreenNodeId = $state<string | null>(null)
+  let topNodeId = $state<string | null>(null)
   let preFullscreenBounds = new Map<string, { x: number; y: number; w: number; h: number }>()
 
   let linkingActive = false
@@ -165,6 +166,7 @@
       selectedNodeIds = selectedNodeIds.has(nodeId) ? selectedNodeIds : new Set([nodeId])
     }
     selectedLinkId = null
+    topNodeId = nodeId
   }
 
   function onNodeContextMenu(nodeId: string, e: MouseEvent) {
@@ -376,6 +378,7 @@
         onDragStart={onDragStartHandler}
         onDragEnd={onDragEndHandler}
         fullscreen={fullscreenNodeId === node.id}
+        topmost={topNodeId === node.id}
       />
     {/each}
     {#each ephemeralConsoles as eph (eph.id)}

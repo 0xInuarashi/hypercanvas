@@ -8,7 +8,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   import SketchpadWidget from '../widgets/SketchpadWidget.svelte'
   import BrowserWidget from '../widgets/BrowserWidget.svelte'
 
-  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen }: {
+  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen, topmost }: {
     node: CanvasNodeType
     selected: boolean
     onSelect: (id: string, additive?: boolean) => void
@@ -27,6 +27,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
     onDragStart?: () => void
     onDragEnd?: (label: string) => void
     fullscreen?: boolean
+    topmost?: boolean
   } = $props()
 
   const PORTS: { side: PortSide; style: string }[] = [
@@ -164,7 +165,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   onpointerup={onPointerUp}
   ondblclick={onNodeDoubleClick}
   oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(node.id, e) }}
-  style="position:absolute;left:{node.x}px;top:{node.y}px;width:{node.width}px;height:{node.height}px;background-color:#0c0c0c;border:1px solid #3a3a3a;border-radius:{fullscreen ? '0' : '8px'};padding:0;cursor:default;color:#e0e0e0;font-size:13px;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;box-shadow:{selected ? '0 0 0 1px #7c8fff, 0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.3)'};{fullscreen ? 'z-index:999;' : ''}"
+  style="position:absolute;left:{node.x}px;top:{node.y}px;width:{node.width}px;height:{node.height}px;background-color:#0c0c0c;border:1px solid #3a3a3a;border-radius:{fullscreen ? '0' : '8px'};padding:0;cursor:default;color:#e0e0e0;font-size:13px;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;box-shadow:{selected ? '0 0 0 1px #7c8fff, 0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.3)'};{fullscreen ? 'z-index:999;' : topmost ? 'z-index:10;' : ''}"
 >
   <svelte:boundary onerror={(e) => console.error(`[Widget] ${node.type} crashed:`, e)}>
     {#snippet failed(error, reset)}
