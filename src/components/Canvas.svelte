@@ -5,7 +5,7 @@
     moveNode, resizeNode, addLink, deleteNode, deleteLink,
     updateNodeLabel, updateNodeScript, toggleNodeActive, replaceNode,
     addNode, setViewportActions, cancelPendingDestroys, clearActiveTool,
-    recallSnap, deleteSnap,
+    recallSnap, deleteSnap, fullscreenState,
   } from '../lib/canvasState.svelte'
   import { getNodeSizes } from '../lib/settingsState.svelte'
   import { pushUndo } from '../lib/historyManager.svelte'
@@ -128,9 +128,9 @@
   // Keyboard shortcuts
   $effect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        const tag = (e.target as HTMLElement).tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return
         if (selectedNodeIds.size > 0) {
           const count = selectedNodeIds.size
           if (window.confirm(`Delete ${count} node${count > 1 ? 's' : ''}?`)) {
@@ -141,6 +141,10 @@
         } else if (selectedLinkId) {
           pushUndo('Delete link'); deleteLink(selectedLinkId); selectedLinkId = null
         }
+      }
+      if (e.key === 'f' && selectedNodeIds.size === 1) {
+        const id = [...selectedNodeIds][0]
+        handleToggleFullscreen(id)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -289,7 +293,7 @@
     if (fullscreenNodeId === id) {
       const saved = preFullscreenBounds.get(id)
       if (saved) { resizeNode(id, saved.x, saved.y, saved.w, saved.h); preFullscreenBounds.delete(id) }
-      fullscreenNodeId = null
+      fullscreenNodeId = null; fullscreenState.active = false
     } else {
       preFullscreenBounds.set(id, { x: node.x, y: node.y, w: node.width, h: node.height })
       const vp = controls.getViewport()
@@ -298,7 +302,7 @@
       const ww = vpWidth / vp.scale
       const wh = vpHeight / vp.scale
       resizeNode(id, wx, wy, ww, wh)
-      fullscreenNodeId = id
+      fullscreenNodeId = id; fullscreenState.active = true
     }
   }
 
@@ -372,7 +376,6 @@
         onDragStart={onDragStartHandler}
         onDragEnd={onDragEndHandler}
         fullscreen={fullscreenNodeId === node.id}
-        onToggleFullscreen={handleToggleFullscreen}
       />
     {/each}
     {#each ephemeralConsoles as eph (eph.id)}
@@ -400,7 +403,7 @@
 
 <!-- Bottom-right toolbar (outside viewport to avoid transform artifacts) -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div style="position:fixed;bottom:16px;right:16px;display:flex;gap:8px;z-index:10;align-items:flex-end;">
+<div style="position:fixed;bottom:16px;right:16px;display:{fullscreenNodeId ? 'none' : 'flex'};gap:8px;z-index:10;align-items:flex-end;">
   <WorkspaceTabs />
   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
     {#if snapSlots.length > 0}

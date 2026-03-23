@@ -4,7 +4,7 @@
   import HistoryPanel from './HistoryPanel.svelte'
   import SettingsPanel from './SettingsPanel.svelte'
   import ScriptApprovalModal from './ScriptApprovalModal.svelte'
-  import { cs, persistState, addNode, setNodeSizesGetter, saveSnap, recallSnap } from '../lib/canvasState.svelte'
+  import { cs, persistState, addNode, setNodeSizesGetter, saveSnap, recallSnap, fullscreenState } from '../lib/canvasState.svelte'
   import { undo, redo } from '../lib/historyManager.svelte'
   import { ss, setShowSettings, getNodeSizes } from '../lib/settingsState.svelte'
   import { parseUrlScript } from '../lib/urlScript'
@@ -64,9 +64,9 @@
 
 <Canvas />
 
-<Sidebar />
+{#if !fullscreenState.active}<Sidebar />{/if}
 
-<div style="position:absolute;bottom:16px;left:16px;display:flex;gap:8px;align-items:flex-end;z-index:10;">
+<div style="position:absolute;bottom:16px;left:16px;display:{fullscreenState.active ? 'none' : 'flex'};gap:8px;align-items:flex-end;z-index:10;">
   <button
     onclick={() => setShowSettings(true)}
     title="Settings"

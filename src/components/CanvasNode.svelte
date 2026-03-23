@@ -8,7 +8,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   import SketchpadWidget from '../widgets/SketchpadWidget.svelte'
   import BrowserWidget from '../widgets/BrowserWidget.svelte'
 
-  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen, onToggleFullscreen }: {
+  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen }: {
     node: CanvasNodeType
     selected: boolean
     onSelect: (id: string, additive?: boolean) => void
@@ -27,7 +27,6 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
     onDragStart?: () => void
     onDragEnd?: (label: string) => void
     fullscreen?: boolean
-    onToggleFullscreen?: (id: string) => void
   } = $props()
 
   const PORTS: { side: PortSide; style: string }[] = [
@@ -192,17 +191,6 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
       <BrowserWidget url={node.label} active={!!node.active} onUpdateUrl={(url) => onUpdateLabel(node.id, url)} />
     {/if}
   </svelte:boundary>
-
-  {#if onToggleFullscreen}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="fullscreen-btn"
-      onpointerdown={(e) => e.stopPropagation()}
-      onclick={(e) => { e.stopPropagation(); onToggleFullscreen(node.id) }}
-      title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-      style="position:absolute;top:3px;right:3px;z-index:10;width:20px;height:20px;display:flex;align-items:center;justify-content:center;background:rgba(30,30,50,0.8);border:1px solid #3a3a5a;border-radius:3px;color:#888;font-size:10px;cursor:pointer;opacity:0;transition:opacity 0.15s;"
-    >{fullscreen ? '⊙' : '⊞'}</div>
-  {/if}
 
   {#each PORTS as p}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
