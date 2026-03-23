@@ -86,6 +86,15 @@
   opacity: 1;
 }
 
+.canvas-node:hover .fullscreen-btn {
+  opacity: 1 !important;
+}
+
+.fullscreen-btn:hover {
+  color: #ccc !important;
+  border-color: #5a5a8a !important;
+}
+
 .resize-handle:hover {
   background: #7c8fff !important;
   border-color: #9aa4ff !important;

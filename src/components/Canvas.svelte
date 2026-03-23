@@ -29,6 +29,8 @@
   let selectedLinkId = $state<string | null>(null)
   let contextMenu = $state<ContextMenuState | null>(null)
   let ephemeralConsoles = $state<EphemeralState[]>([])
+  let fullscreenNodeId = $state<string | null>(null)
+  let preFullscreenBounds = new Map<string, { x: number; y: number; w: number; h: number }>()
 
   let linkingActive = false
   let linkFrom: { nodeId: string; side: PortSide } | null = null
@@ -133,7 +135,7 @@
           const count = selectedNodeIds.size
           if (window.confirm(`Delete ${count} node${count > 1 ? 's' : ''}?`)) {
             pushUndo(`Delete ${count} node${count > 1 ? 's' : ''}`)
-            for (const id of selectedNodeIds) deleteNode(id)
+            for (const id of selectedNodeIds) { deleteNode(id); if (fullscreenNodeId === id) { fullscreenNodeId = null; preFullscreenBounds.delete(id) } }
             selectedNodeIds = new Set()
           }
         } else if (selectedLinkId) {
@@ -150,7 +152,16 @@
     // We use the viewport action for this; suppress is handled via oncontextmenu on the element
   })
 
-  function onNodeSelect(nodeId: string) { selectedNodeIds = selectedNodeIds.has(nodeId) ? selectedNodeIds : new Set([nodeId]); selectedLinkId = null }
+  function onNodeSelect(nodeId: string, additive = false) {
+    if (additive) {
+      const next = new Set(selectedNodeIds)
+      if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId)
+      selectedNodeIds = next
+    } else {
+      selectedNodeIds = selectedNodeIds.has(nodeId) ? selectedNodeIds : new Set([nodeId])
+    }
+    selectedLinkId = null
+  }
 
   function onNodeContextMenu(nodeId: string, e: MouseEvent) {
     const node = cs.nodes.find((n) => n.id === nodeId)
@@ -272,6 +283,25 @@
   function handleSpawnTerminal(nodeId: string, command: string) { const node = cs.nodes.find(n => n.id === nodeId); if (!node) return; addNode('console', node.x + node.width + 30, node.y, 500, 300, { label: command, active: true }) }
   function handleOpenBrowser(nodeId: string, url: string) { const node = cs.nodes.find(n => n.id === nodeId); if (!node) return; const browserId = addNode('browser', node.x + node.width + 30, node.y, 700, 500, { label: url }); addLink(nodeId, 'right', browserId, 'left') }
 
+  function handleToggleFullscreen(id: string) {
+    const node = cs.nodes.find(n => n.id === id)
+    if (!node) return
+    if (fullscreenNodeId === id) {
+      const saved = preFullscreenBounds.get(id)
+      if (saved) { resizeNode(id, saved.x, saved.y, saved.w, saved.h); preFullscreenBounds.delete(id) }
+      fullscreenNodeId = null
+    } else {
+      preFullscreenBounds.set(id, { x: node.x, y: node.y, w: node.width, h: node.height })
+      const vp = controls.getViewport()
+      const wx = -vp.offsetX / vp.scale
+      const wy = -vp.offsetY / vp.scale
+      const ww = vpWidth / vp.scale
+      const wh = vpHeight / vp.scale
+      resizeNode(id, wx, wy, ww, wh)
+      fullscreenNodeId = id
+    }
+  }
+
   function handleBashStart(nodeId: string, command: string): string {
     const id = `eph-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     const node = cs.nodes.find(n => n.id === nodeId); if (!node) return id
@@ -299,7 +329,7 @@
     contextMenu = { x: e.clientX, y: e.clientY, targetType: 'canvas', targetId: '', worldX: worldPos.x, worldY: worldPos.y }
   }
 
-  function onViewportClick() { if (controls.justSelected.current) return; selectedNodeIds = new Set(); selectedLinkId = null }
+  function onViewportClick(e: MouseEvent) { if (controls.justSelected.current) return; if (e.shiftKey && (e.target as HTMLElement).closest('.canvas-node')) return; selectedNodeIds = new Set(); selectedLinkId = null }
 
   function onDragStartHandler() { dragSnapshot = captureSnapshot() }
   function onDragEndHandler(label: string) { if (dragSnapshot) { pushUndo(label, dragSnapshot); dragSnapshot = null } }
@@ -341,6 +371,8 @@
         onOpenBrowser={handleOpenBrowser}
         onDragStart={onDragStartHandler}
         onDragEnd={onDragEndHandler}
+        fullscreen={fullscreenNodeId === node.id}
+        onToggleFullscreen={handleToggleFullscreen}
       />
     {/each}
     {#each ephemeralConsoles as eph (eph.id)}

@@ -8,10 +8,10 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   import SketchpadWidget from '../widgets/SketchpadWidget.svelte'
   import BrowserWidget from '../widgets/BrowserWidget.svelte'
 
-  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd }: {
+  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen, onToggleFullscreen }: {
     node: CanvasNodeType
     selected: boolean
-    onSelect: (id: string) => void
+    onSelect: (id: string, additive?: boolean) => void
     onMove: (id: string, x: number, y: number) => void
     onResize: (id: string, x: number, y: number, w: number, h: number) => void
     onPortDragStart: (nodeId: string, side: PortSide, e: PointerEvent) => void
@@ -26,6 +26,8 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
     onOpenBrowser?: (nodeId: string, url: string) => void
     onDragStart?: () => void
     onDragEnd?: (label: string) => void
+    fullscreen?: boolean
+    onToggleFullscreen?: (id: string) => void
   } = $props()
 
   const PORTS: { side: PortSide; style: string }[] = [
@@ -92,7 +94,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
       e.stopPropagation(); onSelect(node.id); onToggleActive(node.id, true); return
     }
 
-    onSelect(node.id)
+    onSelect(node.id, e.shiftKey)
     e.stopPropagation()
     hasMoved = false
     dragStartPos = { x: e.clientX, y: e.clientY }
@@ -163,7 +165,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   onpointerup={onPointerUp}
   ondblclick={onNodeDoubleClick}
   oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(node.id, e) }}
-  style="position:absolute;left:{node.x}px;top:{node.y}px;width:{node.width}px;height:{node.height}px;background-color:#0c0c0c;border:1px solid #3a3a3a;border-radius:8px;padding:0;cursor:default;color:#e0e0e0;font-size:13px;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;box-shadow:{selected ? '0 0 0 1px #7c8fff, 0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.3)'};"
+  style="position:absolute;left:{node.x}px;top:{node.y}px;width:{node.width}px;height:{node.height}px;background-color:#0c0c0c;border:1px solid #3a3a3a;border-radius:{fullscreen ? '0' : '8px'};padding:0;cursor:default;color:#e0e0e0;font-size:13px;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:stretch;overflow:hidden;box-shadow:{selected ? '0 0 0 1px #7c8fff, 0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.3)'};{fullscreen ? 'z-index:999;' : ''}"
 >
   <svelte:boundary onerror={(e) => console.error(`[Widget] ${node.type} crashed:`, e)}>
     {#snippet failed(error, reset)}
@@ -190,6 +192,17 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
       <BrowserWidget url={node.label} active={!!node.active} onUpdateUrl={(url) => onUpdateLabel(node.id, url)} />
     {/if}
   </svelte:boundary>
+
+  {#if onToggleFullscreen}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fullscreen-btn"
+      onpointerdown={(e) => e.stopPropagation()}
+      onclick={(e) => { e.stopPropagation(); onToggleFullscreen(node.id) }}
+      title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+      style="position:absolute;top:3px;right:3px;z-index:10;width:20px;height:20px;display:flex;align-items:center;justify-content:center;background:rgba(30,30,50,0.8);border:1px solid #3a3a5a;border-radius:3px;color:#888;font-size:10px;cursor:pointer;opacity:0;transition:opacity 0.15s;"
+    >{fullscreen ? '⊙' : '⊞'}</div>
+  {/if}
 
   {#each PORTS as p}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
