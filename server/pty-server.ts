@@ -393,10 +393,13 @@ function setupEphemeral(ws: ServerWebSocket<WsData>, firstParsed?: Record<string
         if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'output', data: str }))
       },
     },
-    onExit() {
+    onExit(_proc: unknown, exitCode: number | null) {
       activeEphemeralProcs.delete(proc)
       ws.data.ephemeralProc = null
-      if (ws.readyState === 1) ws.close()
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'exit', exitCode: exitCode ?? null }))
+        ws.close()
+      }
     },
   })
 

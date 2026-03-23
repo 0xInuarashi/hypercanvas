@@ -24,6 +24,13 @@
     if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight
   })
 
+  // Safety net: force-dismiss if done never becomes true
+  $effect(() => {
+    if (done || phase === 'linger' || phase === 'dematerialize') return
+    const t = setTimeout(() => phase = 'linger', 120_000)
+    return () => clearTimeout(t)
+  })
+
   // done → linger
   $effect(() => {
     if (!done || phase === 'linger' || phase === 'dematerialize') return

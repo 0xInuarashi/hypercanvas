@@ -52,16 +52,23 @@ Rules: Commands run from $HOME. Don't run destructive commands without instructi
     { type: 'function', function: { name: 'spawn_terminal', description: 'Open interactive terminal on canvas.', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: [] } } },
   ]
 
-  async function executeBash(args: { command: string }, signal?: AbortSignal, onChunk?: (chunk: string) => void): Promise<string> {
-    return new Promise<string>((resolve) => {
+  const BASH_TIMEOUT = 120_000 // 2 minutes
+
+  async function executeBash(args: { command: string; timeout?: number }, signal?: AbortSignal, onChunk?: (chunk: string) => void): Promise<{ output: string; exitCode?: number }> {
+    return new Promise<{ output: string; exitCode?: number }>((resolve) => {
       let output = ''
+      let exitCode: number | undefined
+      let resolved = false
+      const done = (result: { output: string; exitCode?: number }) => { if (resolved) return; resolved = true; clearTimeout(timer); signal?.removeEventListener('abort', onAbort); resolve(result) }
       const ws = new WebSocket(getWsUrl())
-      const onAbort = () => { ws.close(); resolve(output + '\n[cancelled]') }
+      const timeout = args.timeout ? args.timeout * 1000 : BASH_TIMEOUT
+      const timer = setTimeout(() => { ws.close(); done({ output: output + '\n[timed out]', exitCode: undefined }) }, timeout)
+      const onAbort = () => { ws.close(); done({ output: output + '\n[cancelled]', exitCode: undefined }) }
       signal?.addEventListener('abort', onAbort)
       ws.onopen = () => { ws.send(JSON.stringify({ type: 'input', data: args.command + '\nexit\n' })) }
-      ws.onmessage = (ev) => { try { const msg = JSON.parse(ev.data); if (msg.type === 'output') { const clean = stripAnsi(msg.data); output += clean; onChunk?.(clean) } } catch {} }
-      ws.onclose = () => { signal?.removeEventListener('abort', onAbort); resolve(output || '[no output]') }
-      ws.onerror = () => { signal?.removeEventListener('abort', onAbort); resolve('Error: WebSocket connection failed') }
+      ws.onmessage = (ev) => { try { const msg = JSON.parse(ev.data); if (msg.type === 'output') { const clean = stripAnsi(msg.data); output += clean; onChunk?.(clean) } else if (msg.type === 'exit') { exitCode = typeof msg.exitCode === 'number' ? msg.exitCode : undefined } } catch {} }
+      ws.onclose = () => { done({ output: output || '[no output]', exitCode }) }
+      ws.onerror = () => { done({ output: 'Error: WebSocket connection failed', exitCode: undefined }) }
     })
   }
 
@@ -94,9 +101,8 @@ Rules: Commands run from $HOME. Don't run destructive commands without instructi
     } catch (err) { return `Error: ${err instanceof Error ? err.message : 'write failed'}` }
   }
 
-  async function executeTool(name: string, args: Record<string, unknown>, signal?: AbortSignal, onChunk?: (chunk: string) => void): Promise<string> {
+  async function executeTool(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
     switch (name) {
-      case 'bash': return executeBash(args as { command: string }, signal, onChunk)
       case 'web_fetch': return executeWebFetch(args as { url: string }, signal)
       case 'read_file': return executeReadFile(args as { path: string; maxLines?: number }, signal)
       case 'write_file': return executeWriteFile(args as { path: string; content: string }, signal)
@@ -182,11 +188,17 @@ Rules: Commands run from $HOME. Don't run destructive commands without instructi
           genie.messages = [...genie.messages, { kind: 'tool', label: lbl, result: '...' }]
 
           const onChunk = ephId && onBashOutput ? (chunk: string) => onBashOutput!(ephId!, chunk) : undefined
-          const result = await executeTool(tc.function.name, args, controller.signal, onChunk)
+          let result: string
+          let bashExitCode: number | undefined
+          if (tc.function.name === 'bash') {
+            const r = await executeBash(args as { command: string; timeout?: number }, controller.signal, onChunk)
+            result = r.output; bashExitCode = r.exitCode
+          } else {
+            result = await executeTool(tc.function.name, args, controller.signal)
+          }
 
           if (ephId && onBashDone) {
-            const m = result.match(/\[exit (\d+|\?)\]\s*$/)
-            onBashDone(ephId, m && m[1] !== '?' ? parseInt(m[1]) : undefined)
+            onBashDone(ephId, bashExitCode)
           }
 
           const msgs = [...genie.messages]; const last = msgs[msgs.length - 1]
