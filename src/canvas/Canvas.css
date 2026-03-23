@@ -101,6 +101,15 @@
   box-shadow: 0 0 0 1px rgba(124, 143, 255, 0.25), 0 0 8px rgba(124, 143, 255, 0.05) !important;
 }
 
+/* Browser iframes: pass scroll to canvas unless node is focused */
+.canvas-node iframe {
+  pointer-events: none;
+}
+
+.canvas-node:focus-within iframe {
+  pointer-events: auto;
+}
+
 /* Ephemeral console */
 .eph-blink {
   animation: eph-blink 1.2s ease-in-out infinite;
