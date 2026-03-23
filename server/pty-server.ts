@@ -389,17 +389,19 @@ function setupEphemeral(ws: ServerWebSocket<WsData>, firstParsed?: Record<string
       cols: 80,
       rows: 24,
       data(_terminal: unknown, data: Uint8Array) {
-        const str = ptyDecoder.decode(data, { stream: true })
-        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'output', data: str }))
+        try {
+          const str = ptyDecoder.decode(data, { stream: true })
+          ws.send(JSON.stringify({ type: 'output', data: str }))
+        } catch { /* WS closed mid-stream */ }
       },
     },
     onExit(_proc: unknown, exitCode: number | null) {
       activeEphemeralProcs.delete(proc)
       ws.data.ephemeralProc = null
-      if (ws.readyState === 1) {
+      try {
         ws.send(JSON.stringify({ type: 'exit', exitCode: exitCode ?? null }))
         ws.close()
-      }
+      } catch { /* WS already closed/closing — client timeout will handle cleanup */ }
     },
   })
 
