@@ -204,7 +204,7 @@
       }
       replaceNode(id, { persistent: false, sessionId: undefined, active: false })
     } else {
-      replaceNode(id, { persistent: true, active: false })
+      replaceNode(id, { persistent: true })
     }
   }
 
