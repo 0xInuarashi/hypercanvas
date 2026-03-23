@@ -7,7 +7,7 @@
     addNode, setViewportActions, cancelPendingDestroys, clearActiveTool,
     recallSnap, deleteSnap, fullscreenState,
   } from '../lib/canvasState.svelte'
-  import { getNodeSizes } from '../lib/settingsState.svelte'
+  import { getNodeSizes, ss } from '../lib/settingsState.svelte'
   import { pushUndo } from '../lib/historyManager.svelte'
   import { captureSnapshot, type Snapshot } from '../lib/canvasState.svelte'
   import CanvasNode from './CanvasNode.svelte'
@@ -373,6 +373,8 @@
         onBashStart={handleBashStart}
         onBashOutput={handleBashOutput}
         onBashDone={handleBashDone}
+        ephemeralGenie={ss.userSettings.ephemeralConsolesGenie !== false}
+        ephemeralMacro={ss.userSettings.ephemeralConsolesMacro !== false}
         onToggleActive={toggleNodeActive}
         onOpenBrowser={handleOpenBrowser}
         onDragStart={onDragStartHandler}

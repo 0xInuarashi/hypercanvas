@@ -8,7 +8,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   import SketchpadWidget from '../widgets/SketchpadWidget.svelte'
   import BrowserWidget from '../widgets/BrowserWidget.svelte'
 
-  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen, topmost }: {
+  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen, topmost, ephemeralGenie, ephemeralMacro }: {
     node: CanvasNodeType
     selected: boolean
     onSelect: (id: string, additive?: boolean) => void
@@ -28,6 +28,8 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
     onDragEnd?: (label: string) => void
     fullscreen?: boolean
     topmost?: boolean
+    ephemeralGenie?: boolean
+    ephemeralMacro?: boolean
   } = $props()
 
   const PORTS: { side: PortSide; style: string }[] = [
@@ -179,13 +181,13 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
     {#if node.type === 'console'}
       <ConsoleWidget active={!!node.active} defaultCommand={node.label} persistent={!!node.persistent} sessionId={node.sessionId} satellitePassword={node.satellitePassword} onSessionCreated={(sid) => onReplaceNode(node.id, { sessionId: sid })} onOpenBrowser={onOpenBrowser ? (url) => onOpenBrowser(node.id, url) : undefined} />
     {:else if node.type === 'macro'}
-      <MacroWidget label={node.label} script={node.script || ''} onBashStart={onBashStart ? (cmd) => onBashStart(node.id, cmd) : undefined} onBashOutput={onBashOutput} onBashDone={onBashDone} />
+      <MacroWidget label={node.label} script={node.script || ''} onBashStart={onBashStart && ephemeralMacro ? (cmd) => onBashStart(node.id, cmd) : undefined} onBashOutput={ephemeralMacro ? onBashOutput : undefined} onBashDone={ephemeralMacro ? onBashDone : undefined} />
     {:else if node.type === 'memo'}
       <MemoWidget label={node.label} onUpdateLabel={(label) => onUpdateLabel(node.id, label)} />
     {:else if node.type === 'files'}
       <FileBrowserWidget initialPath={node.label || undefined} onSetDefaultPath={(path) => onUpdateLabel(node.id, path)} />
     {:else if node.type === 'genie'}
-      <GenieWidget nodeId={node.id} onSpawnTerminal={onSpawnTerminal ? (cmd) => onSpawnTerminal(node.id, cmd) : undefined} onBashStart={onBashStart && node.showEphemeral !== false ? (cmd) => onBashStart(node.id, cmd) : undefined} onBashOutput={node.showEphemeral !== false ? onBashOutput : undefined} onBashDone={node.showEphemeral !== false ? onBashDone : undefined} />
+      <GenieWidget nodeId={node.id} onSpawnTerminal={onSpawnTerminal ? (cmd) => onSpawnTerminal(node.id, cmd) : undefined} onBashStart={onBashStart && ephemeralGenie && node.showEphemeral !== false ? (cmd) => onBashStart(node.id, cmd) : undefined} onBashOutput={ephemeralGenie && node.showEphemeral !== false ? onBashOutput : undefined} onBashDone={ephemeralGenie && node.showEphemeral !== false ? onBashDone : undefined} />
     {:else if node.type === 'sketchpad'}
       <SketchpadWidget label={node.label} onUpdateLabel={(label) => onUpdateLabel(node.id, label)} />
     {:else if node.type === 'browser'}

@@ -13,8 +13,8 @@
   import type { NodeType } from '../types'
   import '../SettingsPanel.css'
 
-  type Category = 'keys' | 'nodeSizes' | 'updates'
-  let category = $state<Category>('keys')
+  type Category = 'general' | 'keys' | 'nodeSizes' | 'updates'
+  let category = $state<Category>('general')
 
   let localOpenrouterKey = $state(ss.openrouterKey)
   let localPrimaryModel = $state(ss.primaryModel)
@@ -153,11 +153,37 @@
   </div>
   <div class="settings-body">
     <div class="settings-categories">
+      <button class="settings-cat" class:active={category === 'general'} onclick={() => category = 'general'}>General</button>
       <button class="settings-cat" class:active={category === 'keys'} onclick={() => category = 'keys'}>Keys</button>
       <button class="settings-cat" class:active={category === 'nodeSizes'} onclick={() => category = 'nodeSizes'}>Node Sizes</button>
       <button class="settings-cat" class:active={category === 'updates'} onclick={() => category = 'updates'}>Updates</button>
     </div>
     <div class="settings-content">
+      {#if category === 'general'}
+        <div class="settings-section-header">
+          <span>General</span>
+        </div>
+        <div class="settings-keys-list">
+          <label style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;cursor:pointer;color:#aaa;font-size:11px;">
+            Genie ephemeral consoles
+            <input
+              type="checkbox"
+              checked={ss.userSettings.ephemeralConsolesGenie !== false}
+              onchange={(e) => updateSettings({ ...ss.userSettings, ephemeralConsolesGenie: (e.target as HTMLInputElement).checked })}
+              style="accent-color:#5a5a8a;cursor:pointer;"
+            />
+          </label>
+          <label style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;cursor:pointer;color:#aaa;font-size:11px;">
+            Macro ephemeral consoles
+            <input
+              type="checkbox"
+              checked={ss.userSettings.ephemeralConsolesMacro !== false}
+              onchange={(e) => updateSettings({ ...ss.userSettings, ephemeralConsolesMacro: (e.target as HTMLInputElement).checked })}
+              style="accent-color:#5a5a8a;cursor:pointer;"
+            />
+          </label>
+        </div>
+      {/if}
       {#if category === 'keys'}
         <div class="settings-section-header">
           <span>API keys &amp; tokens</span>

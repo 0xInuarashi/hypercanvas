@@ -4,6 +4,8 @@ import type { NodeType } from '../types'
 
 export interface UserSettings {
   nodeSizes: Partial<Record<NodeType, { w: number; h: number }>>
+  ephemeralConsolesGenie?: boolean
+  ephemeralConsolesMacro?: boolean
 }
 
 const SETTINGS_KEY = 'hypercanvas-settings'
