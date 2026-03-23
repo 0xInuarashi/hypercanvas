@@ -40,6 +40,7 @@
 Your approach: 1. INVESTIGATE first. 2. PLAN briefly. 3. EXECUTE step by step. 4. VERIFY your work.
 
 Tools: bash, web_fetch, read_file, write_file, tree, find_dir, spawn_terminal.
+bash vs spawn_terminal: Use bash for quick commands (ls, grep, cat, short builds, git commands). Use spawn_terminal for long-running processes (dev servers, watchers, installs), interactive programs (vim, top, ssh), or anything the user may want to interact with or monitor.
 Rules: Commands run from $HOME. Don't run destructive commands without instruction. Keep responses brief.`
 
   const TOOLS: ToolDefinition[] = [
