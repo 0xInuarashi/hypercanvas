@@ -5,6 +5,12 @@ const wsProto = loc.protocol === 'https:' ? 'wss:' : 'ws:'
 
 export const HTTP_URL = `${loc.protocol}//${loc.host}`
 
+// __PTY_PORT__ is injected by Vite at build time (see vite.config.ts).
+// Using window.location.hostname + PTY port lets the frontend connect directly
+// to the PTY server in all modes — bypassing Vite's WS proxy which is broken
+// under Bun due to node:http not firing 'upgrade' on outgoing requests.
+const ptyWsHost = `${loc.hostname}:${__PTY_PORT__}`
+
 // Auth token stored in localStorage so it persists across tabs/sessions
 export function getAuthToken(): string | null {
   return localStorage.getItem('auth-token')
@@ -24,12 +30,12 @@ export function authHeaders(extra?: Record<string, string>): Record<string, stri
 export function getWsUrl(): string {
   const token = getAuthToken()
   return token
-    ? `${wsProto}//${loc.host}/ws?token=${encodeURIComponent(token)}`
-    : `${wsProto}//${loc.host}/ws`
+    ? `${wsProto}//${ptyWsHost}/ws?token=${encodeURIComponent(token)}`
+    : `${wsProto}//${ptyWsHost}/ws`
 }
 
 export function getSatelliteWsUrl(sessionId: string, password: string): string {
-  return `${wsProto}//${loc.host}/ws?satellite=${encodeURIComponent(sessionId)}&password=${encodeURIComponent(password)}`
+  return `${wsProto}//${ptyWsHost}/ws?satellite=${encodeURIComponent(sessionId)}&password=${encodeURIComponent(password)}`
 }
 
 // Clipboard helpers that fall back to execCommand for non-secure contexts (HTTP)
