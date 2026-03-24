@@ -323,8 +323,14 @@
     return { x: baseX, y: sourceNode.y }
   }
 
+  function tildefy(path: string): string {
+    const home = '/home/' + (path.split('/')[2] || '')
+    return path.startsWith(home) ? '~' + path.slice(home.length) : path
+  }
+
   async function handleOpenInReader(nodeId: string, text: string) {
     const trimmed = text.trim()
+    let resolvedPath = trimmed
     try {
       const res = await fetch(`${HTTP_URL}/read-file`, {
         method: 'POST',
@@ -334,14 +340,14 @@
       if (!res.ok) return
       const data = await res.json()
       if (data.error) return
+      if (data.path) resolvedPath = data.path
     } catch { return }
     const node = cs.nodes.find(n => n.id === nodeId)
     if (!node) return
     const sz = getNodeSizes().reader
     const { x, y } = findSpawnPosition(node)
-    const basename = trimmed.split('/').pop() || trimmed
     pushUndo('Open in reader')
-    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath: trimmed, label: basename })
+    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath: resolvedPath, label: tildefy(resolvedPath) })
     addLink(nodeId, 'right', readerId, 'left')
   }
 
@@ -350,9 +356,8 @@
     if (!node) return
     const sz = getNodeSizes().reader
     const { x, y } = findSpawnPosition(node)
-    const basename = filePath.split('/').pop() || filePath
     pushUndo('Open in reader')
-    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath, label: basename })
+    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath, label: tildefy(filePath) })
     addLink(nodeId, 'right', readerId, 'left')
   }
 
@@ -361,9 +366,8 @@
     if (!node) return
     const sz = getNodeSizes().reader
     const { x, y } = findSpawnPosition(node)
-    const basename = filePath.split('/').pop() || filePath
     pushUndo('Go to definition')
-    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath, label: basename, scrollLine: line })
+    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath, label: tildefy(filePath), scrollLine: line })
     addLink(nodeId, 'right', readerId, 'left')
   }
 

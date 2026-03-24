@@ -1236,7 +1236,7 @@ const server = Bun.serve<WsData>({
         const allLines = raw.split('\n')
         const truncated = allLines.length > maxLines
         const content = truncated ? allLines.slice(0, maxLines).join('\n') : raw
-        return json({ content, totalLines: allLines.length, truncated })
+        return json({ content, totalLines: allLines.length, truncated, path: targetPath })
       } catch (err) {
         return json({ error: err instanceof Error ? err.message : 'read failed' }, 500)
       }
