@@ -400,7 +400,7 @@
   </div>
 
   {#if contextMenu}
-    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onClose={() => contextMenu = null} />
+    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
   {/if}
 
 

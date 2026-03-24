@@ -183,6 +183,32 @@
             />
           </label>
         </div>
+        <div class="settings-section-header" style="margin-top:12px;">
+          <span>Console presets</span>
+        </div>
+        <div class="settings-keys-list">
+          {#each ss.userSettings.consolePresets ?? [] as preset, i}
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input
+                type="text"
+                value={preset}
+                onblur={(e) => { const presets = [...(ss.userSettings.consolePresets ?? [])]; presets[i] = (e.currentTarget as HTMLInputElement).value; updateSettings({ ...ss.userSettings, consolePresets: presets }) }}
+                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                class="settings-key-input"
+                style="flex:1;"
+              />
+              <button
+                onclick={() => { const presets = (ss.userSettings.consolePresets ?? []).filter((_, j) => j !== i); updateSettings({ ...ss.userSettings, consolePresets: presets }) }}
+                style="background:none;border:none;color:#666;cursor:pointer;font-size:12px;padding:2px 4px;"
+                title="Remove"
+              >x</button>
+            </div>
+          {/each}
+          <button
+            onclick={() => updateSettings({ ...ss.userSettings, consolePresets: [...(ss.userSettings.consolePresets ?? []), ''] })}
+            style="background:#1a1a2e;border:1px solid #3a3a3a;border-radius:3px;color:#aaa;cursor:pointer;padding:4px 8px;font-size:11px;font-family:'JetBrains Mono','Fira Code',monospace;width:100%;"
+          >+ Add preset</button>
+        </div>
       {/if}
       {#if category === 'keys'}
         <div class="settings-section-header">

@@ -21,7 +21,7 @@
   import { TOOL_PALETTE } from '../toolPalette'
   import '../canvas/ContextMenu.css'
 
-  let { menu, onDelete, onSetCommand, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onClose }: {
+  let { menu, onDelete, onSetCommand, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onApplyPreset, consolePresets, onClose }: {
     menu: ContextMenuState
     onDelete: (type: 'node' | 'link', id: string) => void
     onSetCommand: (id: string) => void
@@ -32,10 +32,12 @@
     onTogglePersistent: (id: string) => void
     onProgramMacro: (id: string) => void
     onRenameMacro: (id: string) => void
-onToggleEphemeral: (id: string) => void
+    onToggleEphemeral: (id: string) => void
     onShareSatellite: (id: string) => void
     onRevokeSatellite: (id: string) => void
     onPlaceTool: (type: NodeType, worldX: number, worldY: number) => void
+    onApplyPreset: (id: string, command: string) => void
+    consolePresets: string[]
     onClose: () => void
   } = $props()
 </script>
@@ -57,6 +59,16 @@ onToggleEphemeral: (id: string) => void
     <button class="context-menu-item" onclick={() => { onToggleActive(menu.targetId); onClose() }}>{menu.nodeActive ? 'Deactivate' : 'Activate'}</button>
     <button class="context-menu-item" onclick={() => { onTogglePersistent(menu.targetId); onClose() }}>{menu.nodePersistent ? 'Disable persistent' : 'Enable persistent'}</button>
     <button class="context-menu-item" onclick={() => { onSetCommand(menu.targetId); onClose() }}>Set default command</button>
+    {#if consolePresets.length > 0}
+      <div class="context-menu-submenu">
+        <button class="context-menu-item">Presets <span style="float:right;opacity:0.5;">▸</span></button>
+        <div class="context-submenu">
+          {#each consolePresets as preset}
+            <button class="context-menu-item" onclick={() => { onApplyPreset(menu.targetId, preset); onClose() }}>{preset}</button>
+          {/each}
+        </div>
+      </div>
+    {/if}
     {#if menu.nodePersistent && menu.nodeSessionId}
       {#if menu.nodeSatellitePassword}
         <button class="context-menu-item" onclick={() => { onRevokeSatellite(menu.targetId); onClose() }}>Revoke Satellite</button>

@@ -39,6 +39,27 @@
   color: #ff6b6b;
 }
 
+.context-menu-submenu {
+  position: relative;
+}
+
+.context-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.context-menu-submenu:hover > .context-submenu {
+  display: block;
+}
+
 .context-menu-label {
   padding: 4px 12px 2px;
   font-size: 10px;

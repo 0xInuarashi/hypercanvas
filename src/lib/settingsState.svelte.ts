@@ -6,6 +6,7 @@ export interface UserSettings {
   nodeSizes: Partial<Record<NodeType, { w: number; h: number }>>
   ephemeralConsolesGenie?: boolean
   ephemeralConsolesMacro?: boolean
+  consolePresets?: string[]
 }
 
 const SETTINGS_KEY = 'hypercanvas-settings'
