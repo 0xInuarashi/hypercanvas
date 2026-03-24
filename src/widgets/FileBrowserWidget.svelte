@@ -21,7 +21,7 @@
   let loading = $state(false)
   let copied = $state<string | null>(null)
   let ctxMenu = $state<CtxMenu | null>(null)
-  let listEl: HTMLDivElement
+  let listEl = $state<HTMLDivElement>(undefined!)
 
   async function fetchDir(path: string) {
     loading = true
@@ -110,8 +110,9 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     bind:this={listEl}
-    style="flex:1;overflow:auto;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;"
-    onpointerdown={(e) => e.stopPropagation()}
+    tabindex="-1"
+    style="flex:1;overflow:auto;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;outline:none;"
+    onpointerdown={(e) => { e.stopPropagation(); listEl?.focus() }}
   >
     {#each entries as entry}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
