@@ -56,8 +56,8 @@ const PORT = parseInt(process.env.PORT || '7888', 10)
 const HOST = process.env.HOST || '0.0.0.0'
 const AUTH_TOKEN = process.env.AUTH_TOKEN || null
 const CLOUD_DIR = join(process.env.HOME || '/', '.hypercanvas')
-const CLOUD_CONFIG_FILE = join(CLOUD_DIR, 'cloud-config.json')
-const CLOUD_STATE_FILE = join(CLOUD_DIR, 'cloud-state.json')
+const CLOUD_CONFIG_FILE = join(CLOUD_DIR, `cloud-config-${PORT}.json`)
+const CLOUD_STATE_FILE = join(CLOUD_DIR, `cloud-state-${PORT}.json`)
 const DIST_DIR = join(BASE_DIR, 'dist')
 const SERVE_STATIC = existsSync(join(DIST_DIR, 'index.html'))
 
