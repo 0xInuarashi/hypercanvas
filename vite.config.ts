@@ -24,6 +24,7 @@ export default defineConfig({
     host: process.env.HOST || 'localhost',
     allowedHosts: true,
     proxy: {
+      '/cloud': ptyTarget,
       '/auth': ptyTarget,
       '/tree': ptyTarget,
       '/find-dir': ptyTarget,
