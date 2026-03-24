@@ -7,7 +7,7 @@
 
 import { execSync } from 'node:child_process'
 import { randomUUID, timingSafeEqual } from 'node:crypto'
-import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, statSync, readdirSync, mkdirSync } from 'node:fs'
 import { join, extname, dirname, resolve, basename } from 'node:path'
 import type { ServerWebSocket, Subprocess } from 'bun'
 
@@ -55,6 +55,9 @@ const CURRENT_VERSION = existsSync(VERSION_FILE)
 const PORT = parseInt(process.env.PORT || '7888', 10)
 const HOST = process.env.HOST || '0.0.0.0'
 const AUTH_TOKEN = process.env.AUTH_TOKEN || null
+const CLOUD_DIR = join(process.env.HOME || '/', '.hypercanvas')
+const CLOUD_CONFIG_FILE = join(CLOUD_DIR, 'cloud-config.json')
+const CLOUD_STATE_FILE = join(CLOUD_DIR, 'cloud-state.json')
 const DIST_DIR = join(BASE_DIR, 'dist')
 const SERVE_STATIC = existsSync(join(DIST_DIR, 'index.html'))
 
@@ -86,7 +89,7 @@ function isValidToken(provided: string): boolean {
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 } as const
 
@@ -694,11 +697,54 @@ const server = Bun.serve<WsData>({
 
     // -- Auth gate for API endpoints --
     if (AUTH_TOKEN) {
-      const API_PATHS = ['/tree', '/find-dir', '/ls', '/exec', '/read-file', '/write-file', '/fetch', '/daemon', '/browse-proxy', '/satellite', '/update']
+      const API_PATHS = ['/cloud', '/tree', '/find-dir', '/ls', '/exec', '/read-file', '/write-file', '/fetch', '/daemon', '/browse-proxy', '/satellite', '/update']
       if (API_PATHS.some(p => url.pathname.startsWith(p))) {
         const authHeader = req.headers.get('authorization') || ''
         const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
         if (!isValidToken(token)) return json({ error: 'Unauthorized' }, 401)
+      }
+    }
+
+    // -- Cloud canvas --
+    if (req.method === 'GET' && url.pathname === '/cloud/config') {
+      try {
+        if (!existsSync(CLOUD_CONFIG_FILE)) return json({ cloudCanvas: false })
+        const raw = readFileSync(CLOUD_CONFIG_FILE, 'utf-8')
+        return json(JSON.parse(raw))
+      } catch {
+        return json({ cloudCanvas: false })
+      }
+    }
+
+    if (req.method === 'PUT' && url.pathname === '/cloud/config') {
+      try {
+        const body = await req.json()
+        if (!existsSync(CLOUD_DIR)) mkdirSync(CLOUD_DIR, { recursive: true })
+        writeFileSync(CLOUD_CONFIG_FILE, JSON.stringify(body), 'utf-8')
+        return json({ ok: true })
+      } catch {
+        return json({ error: 'Failed to write cloud config' }, 500)
+      }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/cloud/state') {
+      try {
+        if (!existsSync(CLOUD_STATE_FILE)) return json(null)
+        const raw = readFileSync(CLOUD_STATE_FILE, 'utf-8')
+        return json(JSON.parse(raw))
+      } catch {
+        return json({ error: 'Failed to read cloud state' }, 500)
+      }
+    }
+
+    if (req.method === 'PUT' && url.pathname === '/cloud/state') {
+      try {
+        const body = await req.json()
+        if (!existsSync(CLOUD_DIR)) mkdirSync(CLOUD_DIR, { recursive: true })
+        writeFileSync(CLOUD_STATE_FILE, JSON.stringify(body), 'utf-8')
+        return json({ ok: true })
+      } catch {
+        return json({ error: 'Failed to write cloud state' }, 500)
       }
     }
 

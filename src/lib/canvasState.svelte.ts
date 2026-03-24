@@ -38,6 +38,85 @@ function saveState(state: WorkspacesState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
 
+// --- Cloud state ---
+
+export let cloudEnabled = false
+
+let cloudSaveTimer: ReturnType<typeof setTimeout> | null = null
+const CLOUD_DEBOUNCE_MS = 2000
+
+function saveCloudState(state: WorkspacesState) {
+  if (cloudSaveTimer) clearTimeout(cloudSaveTimer)
+  cloudSaveTimer = setTimeout(async () => {
+    try {
+      await fetch(`${HTTP_URL}/cloud/state`, {
+        method: 'PUT',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(state),
+      })
+    } catch (err) { console.warn('cloud save failed:', err) }
+  }, CLOUD_DEBOUNCE_MS)
+}
+
+export async function initCloud(): Promise<boolean> {
+  try {
+    const resp = await fetch(`${HTTP_URL}/cloud/config`, { headers: authHeaders() })
+    if (!resp.ok) return false
+    const config = await resp.json()
+    if (!config.cloudCanvas) return false
+    cloudEnabled = true
+    const stateResp = await fetch(`${HTTP_URL}/cloud/state`, { headers: authHeaders() })
+    if (!stateResp.ok) return true
+    const data = await stateResp.json()
+    if (data) applyLoadedState(data)
+    return true
+  } catch { return false }
+}
+
+export async function setCloudCanvas(enabled: boolean): Promise<boolean> {
+  try {
+    // If enabling, upload current state first
+    if (enabled) {
+      const state = buildCurrentState()
+      const uploadResp = await fetch(`${HTTP_URL}/cloud/state`, {
+        method: 'PUT',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(state),
+      })
+      if (!uploadResp.ok) return false
+    }
+    const resp = await fetch(`${HTTP_URL}/cloud/config`, {
+      method: 'PUT',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ cloudCanvas: enabled }),
+    })
+    if (!resp.ok) return false
+    cloudEnabled = enabled
+    return true
+  } catch { return false }
+}
+
+function applyLoadedState(loaded: WorkspacesState) {
+  const activeWs = loaded.workspaces.find(w => w.id === loaded.activeWorkspaceId) ?? loaded.workspaces[0]
+  cs.workspaces = loaded.workspaces
+  cs.activeWorkspaceId = loaded.activeWorkspaceId
+  cs.nextWorkspaceId = loaded.nextWorkspaceId
+  cs.nodes = activeWs?.nodes.map(stripRuntimeState) ?? []
+  cs.links = activeWs?.links ?? []
+  cs.bgColor = activeWs?.bgColor ?? '#0a0a0a'
+  nextId = loaded.nextId
+  nextLinkId = loaded.nextLinkId
+  if (activeWs?.viewport && viewportActions) viewportActions.setViewport(activeWs.viewport)
+}
+
+function buildCurrentState(): WorkspacesState {
+  const viewport = viewportActions?.getViewport() ?? { offsetX: 0, offsetY: 0, scale: 1 }
+  const existingWs = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
+  const currentWs: WorkspaceData = { id: cs.activeWorkspaceId, name: existingWs?.name ?? String(cs.activeWorkspaceId), nodes: cs.nodes.map(stripRuntimeState), links: cs.links, bgColor: cs.bgColor, viewport, snaps: existingWs?.snaps }
+  const allWorkspaces = cs.workspaces.map((w) => w.id === cs.activeWorkspaceId ? currentWs : w)
+  return { version: 2, activeWorkspaceId: cs.activeWorkspaceId, nextWorkspaceId: cs.nextWorkspaceId, nextId, nextLinkId, workspaces: allWorkspaces }
+}
+
 const saved = loadState()
 const activeWs = saved?.workspaces.find((w) => w.id === saved.activeWorkspaceId) ?? saved?.workspaces[0]
 const initialWorkspaces: WorkspaceData[] = saved
@@ -213,9 +292,10 @@ export function deleteSnap(slot: number) {
 // --- Persist ---
 
 export function persistState() {
-  const viewport = viewportActions?.getViewport() ?? { offsetX: 0, offsetY: 0, scale: 1 }
-  const existingWs = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
-  const currentWs: WorkspaceData = { id: cs.activeWorkspaceId, name: existingWs?.name ?? String(cs.activeWorkspaceId), nodes: cs.nodes.map(stripRuntimeState), links: cs.links, bgColor: cs.bgColor, viewport, snaps: existingWs?.snaps }
-  const allWorkspaces = cs.workspaces.map((w) => w.id === cs.activeWorkspaceId ? currentWs : w)
-  saveState({ version: 2, activeWorkspaceId: cs.activeWorkspaceId, nextWorkspaceId: cs.nextWorkspaceId, nextId, nextLinkId, workspaces: allWorkspaces })
+  const state = buildCurrentState()
+  if (cloudEnabled) {
+    saveCloudState(state)
+  } else {
+    saveState(state)
+  }
 }

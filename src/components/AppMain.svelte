@@ -4,7 +4,7 @@
   import HistoryPanel from './HistoryPanel.svelte'
   import SettingsPanel from './SettingsPanel.svelte'
   import ScriptApprovalModal from './ScriptApprovalModal.svelte'
-  import { cs, persistState, addNode, setNodeSizesGetter, saveSnap, recallSnap, fullscreenState } from '../lib/canvasState.svelte'
+  import { cs, persistState, addNode, setNodeSizesGetter, saveSnap, recallSnap, fullscreenState, initCloud } from '../lib/canvasState.svelte'
   import { undo, redo } from '../lib/historyManager.svelte'
   import { ss, setShowSettings, getNodeSizes } from '../lib/settingsState.svelte'
   import { parseUrlScript } from '../lib/urlScript'
@@ -12,6 +12,10 @@
 
   // Register node sizes getter for addNode
   setNodeSizesGetter(() => getNodeSizes())
+
+  // Check server for cloud canvas on startup
+  let cloudLoading = $state(true)
+  initCloud().finally(() => { cloudLoading = false })
 
   // URL scripting
   const pendingScriptInitial = parseUrlScript()
@@ -47,10 +51,10 @@
     return () => window.removeEventListener('keydown', onKeyDown)
   })
 
-  // Auto-persist to localStorage
+  // Auto-persist (localStorage or cloud)
   $effect(() => {
     void cs.nodes; void cs.links; void cs.bgColor; void cs.workspaces; void cs.activeWorkspaceId; void cs.nextWorkspaceId
-    persistState()
+    if (!cloudLoading) persistState()
   })
 </script>
 

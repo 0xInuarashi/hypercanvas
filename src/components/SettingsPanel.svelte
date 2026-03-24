@@ -9,6 +9,7 @@
     setShowSettings,
   } from '../lib/settingsState.svelte'
   import { getPrimaryModel, getFallbackModel } from '../services/openrouter'
+  import { cloudEnabled, setCloudCanvas } from '../lib/canvasState.svelte'
   import { HTTP_URL, authHeaders } from '../config'
   import type { NodeType } from '../types'
   import '../SettingsPanel.css'
@@ -27,6 +28,7 @@
   let latestTarballUrl = $state<string | null>(null)
   let checking = $state(false)
   let updating = $state(false)
+  let cloudSaving = $state(false)
   let updateStatus = $state<string | null>(null)
 
   $effect(() => {
@@ -182,6 +184,25 @@
               style="accent-color:#5a5a8a;cursor:pointer;"
             />
           </label>
+          <label style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;cursor:pointer;color:#aaa;font-size:11px;">
+            Cloud canvas
+            <input
+              type="checkbox"
+              checked={cloudEnabled}
+              onchange={async (e) => {
+                const el = e.target as HTMLInputElement
+                cloudSaving = true
+                const ok = await setCloudCanvas(el.checked)
+                cloudSaving = false
+                if (!ok) el.checked = !el.checked
+              }}
+              disabled={cloudSaving}
+              style="accent-color:#5a5a8a;cursor:pointer;"
+            />
+          </label>
+          {#if cloudEnabled}
+            <div style="color:#556;font-size:10px;">Canvas syncs to server across all browsers.</div>
+          {/if}
         </div>
         <div class="settings-section-header" style="margin-top:12px;">
           <span>Console presets</span>
