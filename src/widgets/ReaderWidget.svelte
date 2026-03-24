@@ -292,7 +292,7 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         bind:this={codeEl}
-        style="padding:4px 0;cursor:default;"
+        style="padding:4px 0;cursor:text;user-select:text;"
         onmousemove={handleHover}
         onmouseleave={handleMouseLeave}
         onclick={handleClick}
