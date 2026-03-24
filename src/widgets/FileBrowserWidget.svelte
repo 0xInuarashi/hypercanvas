@@ -37,6 +37,7 @@
       entries = data.entries
       cwd = data.path
       if (listEl) listEl.scrollTop = 0
+      if (onSetDefaultPath) onSetDefaultPath(data.path)
     } catch {
       error = 'Connection failed'
     } finally {
@@ -118,7 +119,7 @@
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        onclick={entry.isDir ? () => navigate(entry.name) : undefined}
+        ondblclick={entry.isDir ? () => navigate(entry.name) : undefined}
         oncontextmenu={(e) => {
           e.preventDefault()
           e.stopPropagation()
