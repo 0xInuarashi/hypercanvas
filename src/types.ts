@@ -1,4 +1,4 @@
-export type NodeType = 'console' | 'macro' | 'memo' | 'files' | 'genie' | 'sketchpad' | 'browser' | 'reader'
+export type NodeType = 'console' | 'macro' | 'memo' | 'files' | 'genie' | 'sketchpad' | 'browser' | 'reader' | 'autoflow'
 
 export interface CanvasNode {
   id: string

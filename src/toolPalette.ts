@@ -8,4 +8,5 @@ export const TOOL_PALETTE: { type: NodeType; label: string; icon: string }[] = [
   { type: 'genie', label: 'Genie', icon: '⚗' },
   { type: 'sketchpad', label: 'Sketchpad', icon: '✿' },
   { type: 'browser', label: 'Browser', icon: '⊞' },
+  { type: 'autoflow', label: 'Autoflow', icon: '⟳' },
 ]

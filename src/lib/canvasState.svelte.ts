@@ -10,6 +10,7 @@ memo: { w: 300, h: 250 },
   sketchpad: { w: 500, h: 400 },
   browser: { w: 700, h: 500 },
   reader: { w: 600, h: 500 },
+  autoflow: { w: 480, h: 620 },
 }
 
 const STORAGE_KEY = 'hypercanvas'

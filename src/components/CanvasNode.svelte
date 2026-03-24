@@ -8,6 +8,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   import SketchpadWidget from '../widgets/SketchpadWidget.svelte'
   import BrowserWidget from '../widgets/BrowserWidget.svelte'
   import ReaderWidget from '../widgets/ReaderWidget.svelte'
+  import AutoflowWidget from '../widgets/AutoflowWidget.svelte'
 
   let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onTextContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onOpenInReader, onGoToDefinition, onDragStart, onDragEnd, fullscreen, topmost, ephemeralGenie, ephemeralMacro }: {
     node: CanvasNodeType
@@ -198,6 +199,8 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
       <BrowserWidget url={node.label} active={!!node.active} onUpdateUrl={(url) => onUpdateLabel(node.id, url)} />
     {:else if node.type === 'reader'}
       <ReaderWidget filePath={node.filePath || ''} scrollLine={node.scrollLine} label={node.label} onGoToDefinition={onGoToDefinition ? (fp, line) => onGoToDefinition(node.id, fp, line) : undefined} />
+    {:else if node.type === 'autoflow'}
+      <AutoflowWidget nodeId={node.id} label={node.label} onUpdateLabel={(label) => onUpdateLabel(node.id, label)} />
     {/if}
   </svelte:boundary>
 
