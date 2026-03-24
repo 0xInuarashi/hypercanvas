@@ -62,7 +62,7 @@
   async function installUpdate() {
     if (!latestVersion || !latestTarballUrl) return
     updating = true
-    updateStatus = 'Downloading and installing...'
+    updateStatus = 'Starting update...'
     try {
       const resp = await fetch(`${HTTP_URL}/update`, {
         method: 'POST',
@@ -71,17 +71,52 @@
       })
       const data = await resp.json()
       if (data.ok) {
-        updateStatus = 'Installed. Restarting server...'
-        waitForRestart()
+        pollUpdateStatus()
       } else {
         updateStatus = `Failed: ${data.error}`
         updating = false
       }
     } catch {
-      // Server likely exited mid-response — expected
-      updateStatus = 'Restarting server...'
-      waitForRestart()
+      updateStatus = 'Failed to start update'
+      updating = false
     }
+  }
+
+  function pollUpdateStatus() {
+    let attempts = 0
+    const poll = setInterval(async () => {
+      attempts++
+      if (attempts > 120) {
+        clearInterval(poll)
+        updateStatus = 'Update timed out. Check manually.'
+        updating = false
+        return
+      }
+      try {
+        const resp = await fetch(`${HTTP_URL}/update/status`, { headers: authHeaders() })
+        if (resp.ok) {
+          const data = await resp.json()
+          if (data.status === 'downloading') {
+            updateStatus = 'Downloading...'
+          } else if (data.status === 'installing') {
+            updateStatus = data.detail || 'Installing...'
+          } else if (data.status === 'restarting') {
+            updateStatus = 'Restarting server...'
+            clearInterval(poll)
+            waitForRestart()
+          } else if (data.status === 'error') {
+            updateStatus = `Failed: ${data.error}`
+            updating = false
+            clearInterval(poll)
+          }
+        }
+      } catch {
+        // Server likely exited (restarting) — switch to restart polling
+        clearInterval(poll)
+        updateStatus = 'Restarting server...'
+        waitForRestart()
+      }
+    }, 1000)
   }
 
   function waitForRestart() {

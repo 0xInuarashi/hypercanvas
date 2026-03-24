@@ -925,6 +925,56 @@ function satCheckRateLimited(ip: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Background update
+// ---------------------------------------------------------------------------
+
+let updateProgress: { status: 'idle' | 'downloading' | 'installing' | 'restarting' | 'error'; detail: string; error: string | null } = { status: 'idle', detail: '', error: null }
+
+async function runUpdate(version: string, tarballUrl: string) {
+  try {
+    // Download
+    updateProgress = { status: 'downloading', detail: 'Downloading tarball...', error: null }
+    const tmpPath = `/tmp/hypercanvas-${version}.tar.gz`
+    const tmpExtract = `/tmp/hypercanvas-${version}`
+    const dlResp = await fetch(tarballUrl)
+    if (!dlResp.ok) { updateProgress = { status: 'error', detail: '', error: `Download failed: ${dlResp.status}` }; return }
+    await Bun.write(tmpPath, dlResp)
+
+    // Extract to temp dir first
+    updateProgress = { status: 'installing', detail: 'Extracting...', error: null }
+    execSync(`rm -rf ${JSON.stringify(tmpExtract)}`)
+    execSync(`mkdir -p ${JSON.stringify(tmpExtract)}`)
+    execSync(`tar -xzf ${JSON.stringify(tmpPath)} -C ${JSON.stringify(tmpExtract)}`)
+    execSync(`rm -f ${JSON.stringify(tmpPath)}`)
+
+    // Overwrite in-place: copy binary + dist + VERSION into INSTALL_ROOT
+    updateProgress = { status: 'installing', detail: 'Installing files...', error: null }
+    const newBinary = join(tmpExtract, 'hypercanvas')
+    const newDist = join(tmpExtract, 'dist')
+    const newVersion = join(tmpExtract, 'VERSION')
+
+    if (existsSync(newBinary)) {
+      execSync(`cp -f ${JSON.stringify(newBinary)} ${JSON.stringify(join(INSTALL_ROOT, 'hypercanvas'))}`)
+      execSync(`chmod +x ${JSON.stringify(join(INSTALL_ROOT, 'hypercanvas'))}`)
+    }
+    if (existsSync(newDist)) {
+      execSync(`rm -rf ${JSON.stringify(join(INSTALL_ROOT, 'dist'))}`)
+      execSync(`cp -rf ${JSON.stringify(newDist)} ${JSON.stringify(join(INSTALL_ROOT, 'dist'))}`)
+    }
+    if (existsSync(newVersion)) {
+      execSync(`cp -f ${JSON.stringify(newVersion)} ${JSON.stringify(join(INSTALL_ROOT, 'VERSION'))}`)
+    }
+    execSync(`rm -rf ${JSON.stringify(tmpExtract)}`)
+
+    // Exit so systemd restarts with the new binary
+    updateProgress = { status: 'restarting', detail: 'Restarting server...', error: null }
+    setTimeout(() => process.exit(0), 1000)
+  } catch (err) {
+    updateProgress = { status: 'error', detail: '', error: err instanceof Error ? err.message : 'Update failed' }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main server — Bun.serve with HTTP + WebSocket
 // ---------------------------------------------------------------------------
 
@@ -1391,45 +1441,24 @@ const server = Bun.serve<WsData>({
       return json({ version: CURRENT_VERSION })
     }
 
+    if (req.method === 'GET' && url.pathname === '/update/status') {
+      return json({ status: updateProgress.status, detail: updateProgress.detail, error: updateProgress.error })
+    }
+
     if (req.method === 'POST' && url.pathname === '/update') {
       try {
         const body = await req.json()
         const version = body.version as string
         const tarballUrl = body.tarballUrl as string
         if (!version || !tarballUrl) return json({ error: 'Missing version or tarballUrl' }, 400)
+        if (updateProgress.status === 'downloading' || updateProgress.status === 'installing') {
+          return json({ error: 'Update already in progress' }, 409)
+        }
 
-        const versionsDir = join(INSTALL_ROOT, 'versions')
-        const versionDir = join(versionsDir, version)
-        const currentLink = join(INSTALL_ROOT, 'current')
-
-        // Download tarball
-        const tmpPath = `/tmp/hypercanvas-${version}.tar.gz`
-        const dlResp = await fetch(tarballUrl)
-        if (!dlResp.ok) return json({ error: `Download failed: ${dlResp.status}` }, 502)
-        await Bun.write(tmpPath, dlResp)
-
-        // Extract to versioned directory
-        execSync(`mkdir -p ${JSON.stringify(versionDir)}`)
-        execSync(`tar -xzf ${JSON.stringify(tmpPath)} -C ${JSON.stringify(versionDir)}`)
-        execSync(`chmod +x ${JSON.stringify(join(versionDir, 'hypercanvas'))}`)
-        execSync(`rm -f ${JSON.stringify(tmpPath)}`)
-
-        // Update current symlink (relative so it works if the tree moves)
-        execSync(`ln -sfn ${JSON.stringify(join('versions', version))} ${JSON.stringify(currentLink)}`)
-
-        // First-time migration: update systemd to use the current symlink
-        const symlinkExec = join(INSTALL_ROOT, 'current', 'hypercanvas')
-        try {
-          const svcFile = execSync('cat /etc/systemd/system/hypercanvas.service', { encoding: 'utf-8' })
-          if (!svcFile.includes('/current/hypercanvas')) {
-            execSync(`sudo sed -i 's|ExecStart=.*|ExecStart=${symlinkExec}|' /etc/systemd/system/hypercanvas.service`)
-            execSync('sudo systemctl daemon-reload')
-          }
-        } catch { /* sudo not available — user needs to update service manually */ }
-
-        // Respond, then exit so systemd restarts with the new version
-        setTimeout(() => process.exit(0), 1000)
-        return json({ ok: true, version, message: `Updated to ${version}. Restarting...` })
+        // Respond immediately, run update in background
+        updateProgress = { status: 'downloading', detail: 'Downloading tarball...', error: null }
+        runUpdate(version, tarballUrl)
+        return json({ ok: true, status: 'started' })
       } catch (err) {
         return json({ error: err instanceof Error ? err.message : 'Update failed' }, 500)
       }
