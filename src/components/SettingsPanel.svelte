@@ -9,7 +9,7 @@
     setShowSettings,
   } from '../lib/settingsState.svelte'
   import { getPrimaryModel, getFallbackModel } from '../services/openrouter'
-  import { cloudEnabled, setCloudCanvas } from '../lib/canvasState.svelte'
+  import { cloudEnabled, setCloudCanvas, checkCloudState } from '../lib/canvasState.svelte'
   import { HTTP_URL, authHeaders } from '../config'
   import type { NodeType } from '../types'
   import '../SettingsPanel.css'
@@ -29,6 +29,7 @@
   let checking = $state(false)
   let updating = $state(false)
   let cloudSaving = $state(false)
+  let cloudPrompt = $state(false)
   let updateStatus = $state<string | null>(null)
 
   $effect(() => {
@@ -191,15 +192,61 @@
               checked={cloudEnabled}
               onchange={async (e) => {
                 const el = e.target as HTMLInputElement
-                cloudSaving = true
-                const ok = await setCloudCanvas(el.checked)
-                cloudSaving = false
-                if (!ok) el.checked = !el.checked
+                if (el.checked) {
+                  cloudSaving = true
+                  const existing = await checkCloudState()
+                  cloudSaving = false
+                  if (existing) {
+                    cloudPrompt = true
+                    el.checked = false
+                    return
+                  }
+                  cloudSaving = true
+                  const ok = await setCloudCanvas(true)
+                  cloudSaving = false
+                  if (!ok) el.checked = false
+                } else {
+                  cloudSaving = true
+                  const ok = await setCloudCanvas(false)
+                  cloudSaving = false
+                  if (!ok) el.checked = true
+                }
               }}
-              disabled={cloudSaving}
+              disabled={cloudSaving || cloudPrompt}
               style="accent-color:#5a5a8a;cursor:pointer;"
             />
           </label>
+          {#if cloudPrompt}
+            <div style="background:#1a1520;border:1px solid #3a2a4a;border-radius:4px;padding:8px;margin-top:2px;">
+              <div style="color:#aaa;font-size:10px;margin-bottom:6px;">A saved cloud canvas exists on this server.</div>
+              <div style="display:flex;gap:6px;">
+                <button
+                  onclick={async () => {
+                    cloudPrompt = false
+                    cloudSaving = true
+                    await setCloudCanvas(true, 'load')
+                    cloudSaving = false
+                  }}
+                  disabled={cloudSaving}
+                  style="flex:1;background:#2a1a3a;border:1px solid #4a3a5a;border-radius:3px;color:#c8a;cursor:pointer;padding:4px 8px;font-size:10px;font-family:'JetBrains Mono','Fira Code',monospace;"
+                >Load saved canvas</button>
+                <button
+                  onclick={async () => {
+                    cloudPrompt = false
+                    cloudSaving = true
+                    await setCloudCanvas(true, 'overwrite')
+                    cloudSaving = false
+                  }}
+                  disabled={cloudSaving}
+                  style="flex:1;background:#1a1a2e;border:1px solid #3a3a3a;border-radius:3px;color:#888;cursor:pointer;padding:4px 8px;font-size:10px;font-family:'JetBrains Mono','Fira Code',monospace;"
+                >Overwrite with current</button>
+                <button
+                  onclick={() => { cloudPrompt = false }}
+                  style="background:none;border:1px solid #3a3a3a;border-radius:3px;color:#666;cursor:pointer;padding:4px 6px;font-size:10px;font-family:'JetBrains Mono','Fira Code',monospace;"
+                >Cancel</button>
+              </div>
+            </div>
+          {/if}
           {#if cloudEnabled}
             <div style="color:#556;font-size:10px;">Canvas syncs to server across all browsers.</div>
           {/if}

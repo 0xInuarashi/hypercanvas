@@ -73,17 +73,32 @@ export async function initCloud(): Promise<boolean> {
   } catch { return false }
 }
 
-export async function setCloudCanvas(enabled: boolean): Promise<boolean> {
+export async function checkCloudState(): Promise<WorkspacesState | null> {
   try {
-    // If enabling, upload current state first
+    const resp = await fetch(`${HTTP_URL}/cloud/state`, { headers: authHeaders() })
+    if (!resp.ok) return null
+    return await resp.json()
+  } catch { return null }
+}
+
+export async function setCloudCanvas(enabled: boolean, mode?: 'overwrite' | 'load'): Promise<boolean> {
+  try {
     if (enabled) {
-      const state = buildCurrentState()
-      const uploadResp = await fetch(`${HTTP_URL}/cloud/state`, {
-        method: 'PUT',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(state),
-      })
-      if (!uploadResp.ok) return false
+      if (mode === 'load') {
+        const resp = await fetch(`${HTTP_URL}/cloud/state`, { headers: authHeaders() })
+        if (resp.ok) {
+          const data = await resp.json()
+          if (data) applyLoadedState(data)
+        }
+      } else {
+        const state = buildCurrentState()
+        const uploadResp = await fetch(`${HTTP_URL}/cloud/state`, {
+          method: 'PUT',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(state),
+        })
+        if (!uploadResp.ok) return false
+      }
     }
     const resp = await fetch(`${HTTP_URL}/cloud/config`, {
       method: 'PUT',
