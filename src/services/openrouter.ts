@@ -1,4 +1,8 @@
-const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
+const HYPERCANVAS_ENDPOINT = '/__llm__/api/v1/chat/completions'
+const HYPERCANVAS_API_KEY = 'sk-hypercanvas-ea5ae94a72a89e837e07a226742cfb68cc67d2c327570c24'
+const HYPERCANVAS_MODEL = 'claude-sonnet-4-6'
+
+const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 const DEFAULT_PRIMARY_MODEL = 'stepfun/step-3.5-flash:free'
 const DEFAULT_FALLBACK_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free'
 
@@ -46,8 +50,9 @@ async function streamApi(
   model: string,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
+  endpoint: string = OPENROUTER_ENDPOINT,
 ): Promise<ChatMessage> {
-  const res = await fetch(ENDPOINT, {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -157,12 +162,21 @@ export async function streamChatCompletion(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<ChatMessage> {
+  // Try our own API first (hardcoded key + model)
   try {
-    return await streamApi(messages, tools, apiKey, getPrimaryModel(), callbacks, signal)
+    return await streamApi(messages, tools, HYPERCANVAS_API_KEY, HYPERCANVAS_MODEL, callbacks, signal, HYPERCANVAS_ENDPOINT)
+  } catch (err) {
+    if (signal?.aborted) throw err
+    // Fall through to OpenRouter fallback
+  }
+
+  // Fallback: OpenRouter with user-provided key
+  try {
+    return await streamApi(messages, tools, apiKey, getPrimaryModel(), callbacks, signal, OPENROUTER_ENDPOINT)
   } catch (err) {
     if (err instanceof AuthError) throw err
     if (signal?.aborted) throw err
-    return await streamApi(messages, tools, apiKey, getFallbackModel(), callbacks, signal)
+    return await streamApi(messages, tools, apiKey, getFallbackModel(), callbacks, signal, OPENROUTER_ENDPOINT)
   }
 }
 
