@@ -280,8 +280,9 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     bind:this={scrollEl}
-    style="flex:1;overflow:auto;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;background:#121212;position:relative;"
-    onpointerdown={(e) => e.stopPropagation()}
+    tabindex="-1"
+    style="flex:1;overflow:auto;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;background:#121212;position:relative;outline:none;"
+    onpointerdown={(e) => { e.stopPropagation(); scrollEl?.focus() }}
   >
     {#if loading}
       <div style="padding:16px;color:#555;font-size:11px;">Loading...</div>
