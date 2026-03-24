@@ -1464,6 +1464,23 @@ const server = Bun.serve<WsData>({
       }
     }
 
+    // -- LLM proxy (forward to Claude OAuth API) --
+    if (url.pathname.startsWith('/__llm__/')) {
+      const target = 'https://claude-oauth-api-production.up.railway.app' + url.pathname.replace(/^\/__llm__/, '') + url.search
+      const proxyRes = await fetch(target, {
+        method: req.method,
+        headers: req.headers,
+        body: req.method === 'POST' ? req.body : undefined,
+        redirect: 'follow',
+      })
+      const resHeaders = new Headers(proxyRes.headers)
+      resHeaders.set('Access-Control-Allow-Origin', '*')
+      return new Response(proxyRes.body, {
+        status: proxyRes.status,
+        headers: resHeaders,
+      })
+    }
+
     // -- Serve built frontend (production) --
     if (SERVE_STATIC) {
       let filePath = join(DIST_DIR, url.pathname === '/' ? 'index.html' : url.pathname)
