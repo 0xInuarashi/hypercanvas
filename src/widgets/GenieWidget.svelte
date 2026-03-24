@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import type { ChatMessage, ToolDefinition } from '../services/openrouter'
-  import { streamChatCompletion, AuthError } from '../services/openrouter'
+  import { streamChatCompletion } from '../services/openrouter'
   import { HTTP_URL, clipboardWrite, authHeaders, getWsUrl } from '../config'
   import { executeTree, executeFindDir } from '../services/ptyApi'
   import { stripAnsi } from '../lib/stripAnsi'
@@ -146,7 +146,7 @@ Rules: Commands run from $HOME. Don't run destructive commands without instructi
 
     const systemContent = llm.fileTree ? `${BASE_SYSTEM}\n\nProject file tree:\n\`\`\`\n${llm.fileTree}\`\`\`` : BASE_SYSTEM
     const systemPrompt: ChatMessage = { role: 'system', content: systemContent }
-    const apiKey = llm.apiKey
+    const apiKey = llm.apiKey ?? ''
     const runningHistory = [...initialHistory]
 
     try {
