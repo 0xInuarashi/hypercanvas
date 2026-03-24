@@ -10,7 +10,7 @@
   import WidgetHeader from '../components/WidgetHeader.svelte'
   import SatelliteShareModal from '../components/SatelliteShareModal.svelte'
 
-  let { active, defaultCommand, persistent = false, sessionId, satellitePassword, onSessionCreated, onOpenBrowser }: {
+  let { active, defaultCommand, persistent = false, sessionId, satellitePassword, onSessionCreated, onOpenBrowser, onTextContextMenu }: {
     active: boolean
     defaultCommand: string
     persistent?: boolean
@@ -18,6 +18,7 @@
     satellitePassword?: string | null
     onSessionCreated?: (sessionId: string) => void
     onOpenBrowser?: (url: string) => void
+    onTextContextMenu?: (text: string, e: MouseEvent) => void
   } = $props()
 
   let containerEl = $state<HTMLDivElement | undefined>()
@@ -208,6 +209,13 @@
     })
 
     const onCtxMenu = (e: Event) => {
+      const sel = t.getSelection()
+      if (sel && onTextContextMenu) {
+        e.preventDefault()
+        e.stopPropagation()
+        onTextContextMenu(sel, e as MouseEvent)
+        return
+      }
       e.preventDefault()
       e.stopPropagation()
       clipboardRead().then((text) => {

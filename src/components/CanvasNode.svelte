@@ -8,7 +8,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   import SketchpadWidget from '../widgets/SketchpadWidget.svelte'
   import BrowserWidget from '../widgets/BrowserWidget.svelte'
 
-  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen, topmost, ephemeralGenie, ephemeralMacro }: {
+  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onTextContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen, topmost, ephemeralGenie, ephemeralMacro }: {
     node: CanvasNodeType
     selected: boolean
     onSelect: (id: string, additive?: boolean) => void
@@ -16,6 +16,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
     onResize: (id: string, x: number, y: number, w: number, h: number) => void
     onPortDragStart: (nodeId: string, side: PortSide, e: PointerEvent) => void
     onContextMenu: (nodeId: string, e: MouseEvent) => void
+    onTextContextMenu?: (nodeId: string, text: string, e: MouseEvent) => void
     onUpdateLabel: (id: string, label: string) => void
     onReplaceNode: (id: string, newProps: Partial<CanvasNodeType>) => void
     onSpawnTerminal?: (nodeId: string, command: string) => void
@@ -179,7 +180,7 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
       </div>
     {/snippet}
     {#if node.type === 'console'}
-      <ConsoleWidget active={!!node.active} defaultCommand={node.label} persistent={!!node.persistent} sessionId={node.sessionId} satellitePassword={node.satellitePassword} onSessionCreated={(sid) => onReplaceNode(node.id, { sessionId: sid })} onOpenBrowser={onOpenBrowser ? (url) => onOpenBrowser(node.id, url) : undefined} />
+      <ConsoleWidget active={!!node.active} defaultCommand={node.label} persistent={!!node.persistent} sessionId={node.sessionId} satellitePassword={node.satellitePassword} onSessionCreated={(sid) => onReplaceNode(node.id, { sessionId: sid })} onOpenBrowser={onOpenBrowser ? (url) => onOpenBrowser(node.id, url) : undefined} onTextContextMenu={onTextContextMenu ? (text, e) => onTextContextMenu(node.id, text, e) : undefined} />
     {:else if node.type === 'macro'}
       <MacroWidget label={node.label} script={node.script || ''} onBashStart={onBashStart && ephemeralMacro ? (cmd) => onBashStart(node.id, cmd) : undefined} onBashOutput={ephemeralMacro ? onBashOutput : undefined} onBashDone={ephemeralMacro ? onBashDone : undefined} />
     {:else if node.type === 'memo'}

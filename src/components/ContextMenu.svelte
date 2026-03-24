@@ -14,6 +14,7 @@
     nodeSatellitePassword?: string | null
     worldX?: number
     worldY?: number
+    selectedText?: string
   }
 </script>
 
@@ -21,7 +22,7 @@
   import { TOOL_PALETTE } from '../toolPalette'
   import '../canvas/ContextMenu.css'
 
-  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onApplyPreset, consolePresets, onClose }: {
+  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onApplyPreset, onCopyToMemo, consolePresets, onClose }: {
     menu: ContextMenuState
     onDelete: (type: 'node' | 'link', id: string) => void
     onSetCommand: (id: string) => void
@@ -38,6 +39,7 @@
     onRevokeSatellite: (id: string) => void
     onPlaceTool: (type: NodeType, worldX: number, worldY: number) => void
     onApplyPreset: (id: string, command: string) => void
+    onCopyToMemo: (id: string, text: string) => void
     consolePresets: string[]
     onClose: () => void
   } = $props()
@@ -54,6 +56,10 @@
         <span style="margin-right:6px;font-size:10px;opacity:0.7">{t.icon}</span>{t.label}
       </button>
     {/each}
+  {/if}
+  {#if menu.targetType === 'node' && menu.nodeType === 'console' && menu.selectedText}
+    <div class="context-menu-label">Selection</div>
+    <button class="context-menu-item" onclick={() => { onCopyToMemo(menu.targetId, menu.selectedText!); onClose() }}>Copy to memo</button>
   {/if}
   {#if menu.targetType === 'node' && menu.nodeType === 'console'}
     <button class="context-menu-item" onclick={() => { onRestartConsole(menu.targetId); onClose() }}>Restart</button>
