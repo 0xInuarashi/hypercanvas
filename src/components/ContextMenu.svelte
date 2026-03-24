@@ -22,7 +22,7 @@
   import { TOOL_PALETTE } from '../toolPalette'
   import '../canvas/ContextMenu.css'
 
-  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onApplyPreset, onCopyToMemo, onRunInConsole, consolePresets, onClose }: {
+  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onApplyPreset, onCopyToMemo, onRunInConsole, onOpenInReader, consolePresets, onClose }: {
     menu: ContextMenuState
     onDelete: (type: 'node' | 'link', id: string) => void
     onSetCommand: (id: string) => void
@@ -41,6 +41,7 @@
     onApplyPreset: (id: string, command: string) => void
     onCopyToMemo: (id: string, text: string) => void
     onRunInConsole: (id: string, text: string) => void
+    onOpenInReader: (id: string, text: string) => void
     consolePresets: string[]
     onClose: () => void
   } = $props()
@@ -62,6 +63,7 @@
     <div class="context-menu-label">Selection</div>
     <button class="context-menu-item" onclick={() => { onCopyToMemo(menu.targetId, menu.selectedText!); onClose() }}>Copy to memo</button>
     <button class="context-menu-item" onclick={() => { onRunInConsole(menu.targetId, menu.selectedText!); onClose() }}>Run in console</button>
+    <button class="context-menu-item" onclick={() => { onOpenInReader(menu.targetId, menu.selectedText!); onClose() }}>Open in reader</button>
   {/if}
   {#if menu.targetType === 'node' && menu.nodeType === 'console'}
     <button class="context-menu-item" onclick={() => { onRestartConsole(menu.targetId); onClose() }}>Restart</button>

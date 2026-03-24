@@ -37,6 +37,7 @@ export default defineConfig({
       '/satellite': ptyTarget,
       '/browse-proxy': ptyTarget,
       '/update': ptyTarget,
+      '/lsp': ptyTarget,
       '/__llm__': {
         target: 'https://claude-oauth-api-production.up.railway.app',
         changeOrigin: true,

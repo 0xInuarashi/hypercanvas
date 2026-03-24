@@ -9,6 +9,7 @@ memo: { w: 300, h: 250 },
   genie: { w: 450, h: 550 },
   sketchpad: { w: 500, h: 400 },
   browser: { w: 700, h: 500 },
+  reader: { w: 600, h: 500 },
 }
 
 const STORAGE_KEY = 'hypercanvas'

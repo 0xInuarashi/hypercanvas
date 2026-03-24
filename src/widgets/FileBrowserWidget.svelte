@@ -5,9 +5,10 @@
   import WidgetHeader from '../components/WidgetHeader.svelte'
   import '../canvas/ContextMenu.css'
 
-  let { initialPath, onSetDefaultPath }: {
+  let { initialPath, onSetDefaultPath, onOpenInReader }: {
     initialPath?: string
     onSetDefaultPath?: (path: string) => void
+    onOpenInReader?: (filePath: string) => void
   } = $props()
 
   interface Entry { name: string; isDir: boolean }
@@ -159,6 +160,12 @@
               fetchDir(path)
             }}
           >Set as default folder</button>
+        {/if}
+        {#if !ctxMenu.isDir && onOpenInReader}
+          <button
+            class="context-menu-item"
+            onclick={() => { onOpenInReader!(ctxMenu!.path); ctxMenu = null }}
+          >Open in reader</button>
         {/if}
       </div>
     </div>

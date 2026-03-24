@@ -7,8 +7,9 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
   import GenieWidget from '../widgets/GenieWidget.svelte'
   import SketchpadWidget from '../widgets/SketchpadWidget.svelte'
   import BrowserWidget from '../widgets/BrowserWidget.svelte'
+  import ReaderWidget from '../widgets/ReaderWidget.svelte'
 
-  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onTextContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onDragStart, onDragEnd, fullscreen, topmost, ephemeralGenie, ephemeralMacro }: {
+  let { node, selected, onSelect, onMove, onResize, onPortDragStart, onContextMenu, onTextContextMenu, onUpdateLabel, onReplaceNode, onSpawnTerminal, onBashStart, onBashOutput, onBashDone, onToggleActive, onOpenBrowser, onOpenInReader, onGoToDefinition, onDragStart, onDragEnd, fullscreen, topmost, ephemeralGenie, ephemeralMacro }: {
     node: CanvasNodeType
     selected: boolean
     onSelect: (id: string, additive?: boolean) => void
@@ -25,6 +26,8 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
     onBashDone?: (id: string, exitCode?: number) => void
     onToggleActive?: (id: string, active: boolean) => void
     onOpenBrowser?: (nodeId: string, url: string) => void
+    onOpenInReader?: (nodeId: string, filePath: string) => void
+    onGoToDefinition?: (nodeId: string, filePath: string, line: number) => void
     onDragStart?: () => void
     onDragEnd?: (label: string) => void
     fullscreen?: boolean
@@ -186,13 +189,15 @@ import MemoWidget from '../widgets/MemoWidget.svelte'
     {:else if node.type === 'memo'}
       <MemoWidget label={node.label} onUpdateLabel={(label) => onUpdateLabel(node.id, label)} />
     {:else if node.type === 'files'}
-      <FileBrowserWidget initialPath={node.label || undefined} onSetDefaultPath={(path) => onUpdateLabel(node.id, path)} />
+      <FileBrowserWidget initialPath={node.label || undefined} onSetDefaultPath={(path) => onUpdateLabel(node.id, path)} onOpenInReader={onOpenInReader ? (path) => onOpenInReader(node.id, path) : undefined} />
     {:else if node.type === 'genie'}
       <GenieWidget nodeId={node.id} onSpawnTerminal={onSpawnTerminal ? (cmd) => onSpawnTerminal(node.id, cmd) : undefined} onBashStart={onBashStart && ephemeralGenie && node.showEphemeral !== false ? (cmd) => onBashStart(node.id, cmd) : undefined} onBashOutput={ephemeralGenie && node.showEphemeral !== false ? onBashOutput : undefined} onBashDone={ephemeralGenie && node.showEphemeral !== false ? onBashDone : undefined} />
     {:else if node.type === 'sketchpad'}
       <SketchpadWidget label={node.label} onUpdateLabel={(label) => onUpdateLabel(node.id, label)} />
     {:else if node.type === 'browser'}
       <BrowserWidget url={node.label} active={!!node.active} onUpdateUrl={(url) => onUpdateLabel(node.id, url)} />
+    {:else if node.type === 'reader'}
+      <ReaderWidget filePath={node.filePath || ''} scrollLine={node.scrollLine} label={node.label} onGoToDefinition={onGoToDefinition ? (fp, line) => onGoToDefinition(node.id, fp, line) : undefined} />
     {/if}
   </svelte:boundary>
 

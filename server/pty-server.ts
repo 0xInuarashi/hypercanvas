@@ -136,10 +136,11 @@ const MAX_SCROLLBACK = 512 * 1024
 // ---------------------------------------------------------------------------
 
 interface WsData {
-  mode: 'pending' | 'ephemeral' | 'daemon' | 'satellite'
+  mode: 'pending' | 'ephemeral' | 'daemon' | 'satellite' | 'lsp'
   ephemeralProc: Subprocess | null
   daemonSessionId: string | null
   satSessionId: string | null
+  lspLanguage: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +162,296 @@ interface DaemonSession {
 
 const daemonSessions = new Map<string, DaemonSession>()
 const decoder = new TextDecoder()
+
+// ---------------------------------------------------------------------------
+// LSP session registry
+// ---------------------------------------------------------------------------
+
+interface LspSession {
+  language: string
+  proc: Subprocess
+  clients: Set<ServerWebSocket<WsData>>
+  pendingRequests: Map<number, ServerWebSocket<WsData>>
+  nextId: number
+  initialized: boolean
+  rootUri: string | null
+}
+
+const lspSessions = new Map<string, LspSession>()
+
+const LSP_COMMANDS: Record<string, string[]> = {
+  typescript: ['bunx', 'typescript-language-server', '--stdio'],
+  javascript: ['bunx', 'typescript-language-server', '--stdio'],
+  python: ['pylsp'],
+  go: ['gopls', 'serve'],
+  rust: ['rust-analyzer'],
+  json: ['bunx', 'vscode-json-language-server', '--stdio'],
+  yaml: ['bunx', 'yaml-language-server', '--stdio'],
+  svelte: ['bunx', 'svelteserver', '--stdio'],
+}
+
+const ROOT_PATTERNS: Record<string, string[]> = {
+  typescript: ['tsconfig.json', 'package.json'],
+  javascript: ['package.json'],
+  python: ['pyproject.toml', 'setup.py', 'requirements.txt'],
+  go: ['go.mod'],
+  rust: ['Cargo.toml'],
+  svelte: ['svelte.config.js', 'package.json'],
+}
+
+function findProjectRoot(filePath: string, language: string): string {
+  const patterns = ROOT_PATTERNS[language] || ['package.json']
+  let dir = dirname(filePath)
+  const home = process.env.HOME || '/'
+  while (dir.length >= home.length) {
+    for (const pattern of patterns) {
+      if (existsSync(join(dir, pattern))) return dir
+    }
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return dirname(filePath)
+}
+
+async function getOrCreateLspSession(language: string, filePath: string): Promise<LspSession | null> {
+  const lspKey = language === 'tsx' || language === 'jsx' ? 'typescript' : language
+  let session = lspSessions.get(lspKey)
+  if (session) return session
+
+  const cmd = LSP_COMMANDS[lspKey]
+  if (!cmd) return null
+
+  try {
+    const proc = Bun.spawn(cmd, {
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: childEnv(),
+    })
+
+    const rootUri = `file://${findProjectRoot(filePath, lspKey)}`
+
+    session = {
+      language: lspKey,
+      proc,
+      clients: new Set(),
+      pendingRequests: new Map(),
+      nextId: 1,
+      initialized: false,
+      rootUri,
+    }
+    lspSessions.set(lspKey, session)
+
+    // Read stdout for JSON-RPC responses
+    readLspOutput(session)
+
+    // Initialize the language server
+    const initId = session.nextId++
+    sendLspMessage(session, {
+      jsonrpc: '2.0',
+      id: initId,
+      method: 'initialize',
+      params: {
+        processId: process.pid,
+        rootUri,
+        capabilities: {
+          textDocument: {
+            hover: { contentFormat: ['plaintext', 'markdown'] },
+            definition: { dynamicRegistration: false },
+            references: { dynamicRegistration: false },
+            publishDiagnostics: { relatedInformation: true },
+          },
+        },
+      },
+    })
+
+    // Wait for initialize response (with timeout)
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('LSP init timeout')), 15000)
+      const check = setInterval(() => {
+        if (session!.initialized) {
+          clearInterval(check)
+          clearTimeout(timeout)
+          resolve()
+        }
+      }, 50)
+    })
+
+    // Send initialized notification
+    sendLspMessage(session, { jsonrpc: '2.0', method: 'initialized', params: {} })
+
+    return session
+  } catch (err) {
+    console.warn(`[LSP] Failed to start ${lspKey}:`, err)
+    lspSessions.delete(lspKey)
+    return null
+  }
+}
+
+function sendLspMessage(session: LspSession, msg: Record<string, unknown>) {
+  const content = JSON.stringify(msg)
+  const header = `Content-Length: ${Buffer.byteLength(content)}\r\n\r\n`
+  try {
+    session.proc.stdin!.write(header + content)
+  } catch (err) {
+    console.warn(`[LSP] Write error for ${session.language}:`, err)
+  }
+}
+
+function readLspOutput(session: LspSession) {
+  const stdout = session.proc.stdout as ReadableStream<Uint8Array>
+  const reader = stdout.getReader()
+  let buffer = ''
+
+  async function pump() {
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += new TextDecoder().decode(value)
+
+        // Parse JSON-RPC messages from buffer
+        while (true) {
+          const headerEnd = buffer.indexOf('\r\n\r\n')
+          if (headerEnd === -1) break
+
+          const header = buffer.slice(0, headerEnd)
+          const match = header.match(/Content-Length:\s*(\d+)/i)
+          if (!match) { buffer = buffer.slice(headerEnd + 4); continue }
+
+          const contentLength = parseInt(match[1], 10)
+          const contentStart = headerEnd + 4
+          if (buffer.length < contentStart + contentLength) break
+
+          const content = buffer.slice(contentStart, contentStart + contentLength)
+          buffer = buffer.slice(contentStart + contentLength)
+
+          try {
+            const msg = JSON.parse(content) as Record<string, unknown>
+            handleLspServerMessage(session, msg)
+          } catch { /* ignore malformed */ }
+        }
+      }
+    } catch { /* stream closed */ }
+  }
+  pump()
+
+  // Read stderr for debugging
+  if (session.proc.stderr) {
+    const stderrReader = (session.proc.stderr as ReadableStream<Uint8Array>).getReader()
+    async function drainStderr() {
+      try {
+        while (true) {
+          const { done } = await stderrReader.read()
+          if (done) break
+        }
+      } catch { /* ignore */ }
+    }
+    drainStderr()
+  }
+}
+
+function handleLspServerMessage(session: LspSession, msg: Record<string, unknown>) {
+  // Response to a request
+  if ('id' in msg && ('result' in msg || 'error' in msg)) {
+    const id = msg.id as number
+
+    // Check if this is the initialize response
+    if (!session.initialized && msg.result) {
+      session.initialized = true
+      return
+    }
+
+    // Route response to requesting client
+    const client = session.pendingRequests.get(id)
+    if (client) {
+      session.pendingRequests.delete(id)
+      try {
+        client.send(JSON.stringify({
+          type: 'lsp:response',
+          id,
+          result: msg.result ?? null,
+          error: msg.error ?? undefined,
+        }))
+      } catch { /* client gone */ }
+    }
+    return
+  }
+
+  // Notification from server (e.g., diagnostics)
+  if ('method' in msg && !('id' in msg)) {
+    const notification = JSON.stringify({
+      type: 'lsp:notification',
+      method: msg.method,
+      params: msg.params,
+    })
+    for (const client of session.clients) {
+      try { client.send(notification) } catch { /* ignore */ }
+    }
+  }
+}
+
+function destroyLspSession(language: string) {
+  const session = lspSessions.get(language)
+  if (!session) return
+  try {
+    sendLspMessage(session, { jsonrpc: '2.0', id: session.nextId++, method: 'shutdown', params: null })
+    setTimeout(() => {
+      try { sendLspMessage(session, { jsonrpc: '2.0', method: 'exit', params: null }) } catch {}
+      setTimeout(() => { try { session.proc.kill() } catch {} }, 1000)
+    }, 500)
+  } catch { try { session.proc.kill() } catch {} }
+  lspSessions.delete(language)
+}
+
+function handleLspClientMessage(ws: ServerWebSocket<WsData>, parsed: Record<string, unknown>) {
+  const language = ws.data.lspLanguage
+  if (!language) return
+  const lspKey = language === 'tsx' || language === 'jsx' ? 'typescript' : language
+  const session = lspSessions.get(lspKey)
+  if (!session) return
+
+  if (parsed.type === 'lsp:request') {
+    const clientId = parsed.id as number
+    const serverId = session.nextId++
+    session.pendingRequests.set(serverId, ws)
+    // Remap id so we can route the response back, and store the original client id
+    sendLspMessage(session, {
+      jsonrpc: '2.0',
+      id: serverId,
+      method: parsed.method,
+      params: parsed.params,
+    })
+    // Store mapping from server id back to client id
+    const origSend = ws.send.bind(ws)
+    const originalHandler = session.pendingRequests.get(serverId)
+    if (originalHandler) {
+      // We need to remap the ID in the response — override the pending entry
+      session.pendingRequests.set(serverId, {
+        send(data: string) {
+          // Rewrite the id in the response
+          try {
+            const msg = JSON.parse(data)
+            if (msg.type === 'lsp:response') msg.id = clientId
+            origSend(JSON.stringify(msg))
+          } catch { origSend(data) }
+        },
+        data: ws.data,
+        readyState: ws.readyState,
+      } as unknown as ServerWebSocket<WsData>)
+    }
+    return
+  }
+
+  if (parsed.type === 'lsp:notify') {
+    sendLspMessage(session, {
+      jsonrpc: '2.0',
+      method: parsed.method as string,
+      params: parsed.params,
+    })
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Process tree management
@@ -653,7 +944,7 @@ const server = Bun.serve<WsData>({
       if (satId && satPwd) {
         const session = daemonSessions.get(satId)
         if (session?.satellitePassword && timingSafeCompare(session.satellitePassword, satPwd)) {
-          if (server.upgrade(req, { data: { mode: 'satellite' as const, ephemeralProc: null, daemonSessionId: null, satSessionId: satId } })) return
+          if (server.upgrade(req, { data: { mode: 'satellite' as const, ephemeralProc: null, daemonSessionId: null, satSessionId: satId, lspLanguage: null } })) return
         }
         return json({ error: 'Unauthorized' }, 401)
       }
@@ -663,7 +954,7 @@ const server = Bun.serve<WsData>({
         if (!isValidToken(token)) return json({ error: 'Unauthorized' }, 401)
       }
 
-      if (server.upgrade(req, { data: { mode: 'pending' as const, ephemeralProc: null, daemonSessionId: null, satSessionId: null } })) return
+      if (server.upgrade(req, { data: { mode: 'pending' as const, ephemeralProc: null, daemonSessionId: null, satSessionId: null, lspLanguage: null } })) return
       return json({ error: 'Upgrade failed' }, 500)
     }
 
@@ -697,7 +988,7 @@ const server = Bun.serve<WsData>({
 
     // -- Auth gate for API endpoints --
     if (AUTH_TOKEN) {
-      const API_PATHS = ['/cloud', '/tree', '/find-dir', '/ls', '/exec', '/read-file', '/write-file', '/fetch', '/daemon', '/browse-proxy', '/satellite', '/update']
+      const API_PATHS = ['/cloud', '/tree', '/find-dir', '/ls', '/exec', '/read-file', '/write-file', '/fetch', '/daemon', '/browse-proxy', '/satellite', '/update', '/lsp']
       if (API_PATHS.some(p => url.pathname.startsWith(p))) {
         const authHeader = req.headers.get('authorization') || ''
         const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
@@ -940,7 +1231,7 @@ const server = Bun.serve<WsData>({
         const targetPath = resolve(rawPath.startsWith('~') ? rawPath.replace('~', home) : rawPath)
         if (!targetPath.startsWith(home)) return json({ error: `Path must be within ${home}` }, 400)
         if (!existsSync(targetPath) || !statSync(targetPath).isFile()) return json({ error: 'File not found' }, 404)
-        const maxLines = Math.min(Math.max(Number(body.maxLines) || 200, 1), 2000)
+        const maxLines = Math.min(Math.max(Number(body.maxLines) || 200, 1), 50000)
         const raw = readFileSync(targetPath, 'utf-8')
         const allLines = raw.split('\n')
         const truncated = allLines.length > maxLines
@@ -1086,6 +1377,15 @@ const server = Bun.serve<WsData>({
       return json(list)
     }
 
+    // -- /lsp --
+    if (req.method === 'GET' && url.pathname === '/lsp/status') {
+      const status: Record<string, { clients: number; initialized: boolean }> = {}
+      for (const [lang, session] of lspSessions) {
+        status[lang] = { clients: session.clients.size, initialized: session.initialized }
+      }
+      return json(status)
+    }
+
     // -- /update --
     if (req.method === 'GET' && url.pathname === '/update/version') {
       return json({ version: CURRENT_VERSION })
@@ -1195,6 +1495,23 @@ const server = Bun.serve<WsData>({
           }
           return
         }
+        if (parsed && parsed.type === 'lsp:init') {
+          const language = parsed.language as string
+          const filePath = parsed.filePath as string
+          ws.data.mode = 'lsp'
+          ws.data.lspLanguage = language
+          getOrCreateLspSession(language, filePath).then(session => {
+            if (session) {
+              session.clients.add(ws)
+              ws.send(JSON.stringify({ type: 'lsp:ready' }))
+            } else {
+              ws.send(JSON.stringify({ type: 'lsp:error', error: `No LSP server available for ${language}` }))
+            }
+          }).catch(err => {
+            ws.send(JSON.stringify({ type: 'lsp:error', error: err instanceof Error ? err.message : 'LSP init failed' }))
+          })
+          return
+        }
         setupEphemeral(ws, parsed ?? undefined)
         return
       }
@@ -1208,6 +1525,11 @@ const server = Bun.serve<WsData>({
             }
           }
         }
+        return
+      }
+
+      if (ws.data.mode === 'lsp') {
+        if (parsed) handleLspClientMessage(ws, parsed)
         return
       }
 
@@ -1234,6 +1556,20 @@ const server = Bun.serve<WsData>({
       if (ws.data.mode === 'satellite' && ws.data.satSessionId) {
         const session = daemonSessions.get(ws.data.satSessionId)
         if (session) session.clients.delete(ws)
+      }
+      if (ws.data.mode === 'lsp' && ws.data.lspLanguage) {
+        const lspKey = ws.data.lspLanguage === 'tsx' || ws.data.lspLanguage === 'jsx' ? 'typescript' : ws.data.lspLanguage
+        const session = lspSessions.get(lspKey)
+        if (session) {
+          session.clients.delete(ws)
+          if (session.clients.size === 0) {
+            // Delay shutdown to allow quick reopen
+            setTimeout(() => {
+              const s = lspSessions.get(lspKey)
+              if (s && s.clients.size === 0) destroyLspSession(lspKey)
+            }, 30000)
+          }
+        }
       }
     },
   },
@@ -1262,6 +1598,10 @@ function shutdown() {
     killProcessTree(proc.pid)
   }
   activeEphemeralProcs.clear()
+
+  for (const [lang] of lspSessions) {
+    destroyLspSession(lang)
+  }
 
   for (const [port] of browseProxies) {
     destroyBrowseProxy(port)

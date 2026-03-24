@@ -323,6 +323,50 @@
     return { x: baseX, y: sourceNode.y }
   }
 
+  async function handleOpenInReader(nodeId: string, text: string) {
+    const trimmed = text.trim()
+    try {
+      const res = await fetch(`${HTTP_URL}/read-file`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ path: trimmed, maxLines: 1 }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.error) return
+    } catch { return }
+    const node = cs.nodes.find(n => n.id === nodeId)
+    if (!node) return
+    const sz = getNodeSizes().reader
+    const { x, y } = findSpawnPosition(node)
+    const basename = trimmed.split('/').pop() || trimmed
+    pushUndo('Open in reader')
+    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath: trimmed, label: basename })
+    addLink(nodeId, 'right', readerId, 'left')
+  }
+
+  function handleOpenInReaderDirect(nodeId: string, filePath: string) {
+    const node = cs.nodes.find(n => n.id === nodeId)
+    if (!node) return
+    const sz = getNodeSizes().reader
+    const { x, y } = findSpawnPosition(node)
+    const basename = filePath.split('/').pop() || filePath
+    pushUndo('Open in reader')
+    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath, label: basename })
+    addLink(nodeId, 'right', readerId, 'left')
+  }
+
+  function handleGoToDefinition(nodeId: string, filePath: string, line: number) {
+    const node = cs.nodes.find(n => n.id === nodeId)
+    if (!node) return
+    const sz = getNodeSizes().reader
+    const { x, y } = findSpawnPosition(node)
+    const basename = filePath.split('/').pop() || filePath
+    pushUndo('Go to definition')
+    const readerId = addNode('reader', x, y, sz.w, sz.h, { filePath, label: basename, scrollLine: line })
+    addLink(nodeId, 'right', readerId, 'left')
+  }
+
   function handleDuplicateConsole(id: string) { const node = cs.nodes.find(n => n.id === id); if (!node) return; const { x, y } = findSpawnPosition(node); const newId = addNode('console', x, y, node.width, node.height, { label: node.label, active: true }); addLink(id, 'right', newId, 'left') }
   function handleSpawnConsole(id: string) { const node = cs.nodes.find(n => n.id === id); if (!node) return; const firstCmd = node.label ? node.label.split('&&')[0].trim() : ''; const { x, y } = findSpawnPosition(node); const newId = addNode('console', x, y, node.width, node.height, { label: firstCmd, active: true }); addLink(id, 'right', newId, 'left') }
   function handleSpawnTerminal(nodeId: string, command: string) { const node = cs.nodes.find(n => n.id === nodeId); if (!node) return; addNode('console', node.x + node.width + 30, node.y, 500, 300, { label: command, active: true }) }
@@ -417,6 +461,8 @@
         ephemeralMacro={ss.userSettings.ephemeralConsolesMacro !== false}
         onToggleActive={toggleNodeActive}
         onOpenBrowser={handleOpenBrowser}
+        onOpenInReader={handleOpenInReaderDirect}
+        onGoToDefinition={handleGoToDefinition}
         onDragStart={onDragStartHandler}
         onDragEnd={onDragEndHandler}
         fullscreen={fullscreenNodeId === node.id}
@@ -440,7 +486,7 @@
   </div>
 
   {#if contextMenu}
-    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} onCopyToMemo={handleCopyToMemo} onRunInConsole={handleRunInConsole} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
+    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} onCopyToMemo={handleCopyToMemo} onRunInConsole={handleRunInConsole} onOpenInReader={handleOpenInReader} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
   {/if}
 
 

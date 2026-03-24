@@ -1,4 +1,4 @@
-export type NodeType = 'console' | 'macro' | 'memo' | 'files' | 'genie' | 'sketchpad' | 'browser'
+export type NodeType = 'console' | 'macro' | 'memo' | 'files' | 'genie' | 'sketchpad' | 'browser' | 'reader'
 
 export interface CanvasNode {
   id: string
@@ -14,6 +14,8 @@ export interface CanvasNode {
   sessionId?: string
   showEphemeral?: boolean
   satellitePassword?: string | null
+  filePath?: string
+  scrollLine?: number
 }
 
 export interface Link {
