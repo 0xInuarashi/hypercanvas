@@ -953,6 +953,19 @@ const server = Bun.serve<WsData>({
       return json({ status: 'running' })
     }
 
+    if (req.method === 'POST' && url.pathname === '/daemon/cwd') {
+      const body = await req.json()
+      const session = daemonSessions.get(body.sessionId)
+      if (!session?.proc?.pid) return json({ error: 'No running process' }, 404)
+      try {
+        const { readlink } = await import('node:fs/promises')
+        let cwd = await readlink(`/proc/${session.proc.pid}/cwd`)
+        const home = process.env.HOME
+        if (home && cwd.startsWith(home)) cwd = '~' + cwd.slice(home.length)
+        return json({ cwd })
+      } catch { return json({ error: 'Could not read cwd' }, 500) }
+    }
+
     if (req.method === 'POST' && url.pathname === '/daemon/destroy') {
       const body = await req.json()
       const session = daemonSessions.get(body.sessionId)

@@ -190,6 +190,24 @@
     if (cmd !== null) { pushUndo('Set command'); updateNodeLabel(id, cmd.trim()) }
   }
 
+  async function handleSetFolder(id: string) {
+    const node = cs.nodes.find(n => n.id === id)
+    if (!node) return
+    let cwd: string | null = null
+    if (node.sessionId) {
+      try {
+        const res = await fetch(`${HTTP_URL}/daemon/cwd`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: node.sessionId }) })
+        const data = await res.json()
+        if (data.cwd) cwd = data.cwd
+      } catch {}
+    }
+    if (cwd) { pushUndo('Set folder'); updateNodeLabel(id, `cd ${cwd}`) }
+    else {
+      const folder = window.prompt('Set default folder (no running session to detect cwd):')
+      if (folder?.trim()) { pushUndo('Set folder'); updateNodeLabel(id, `cd ${folder.trim()}`) }
+    }
+  }
+
   function handleRestartConsole(id: string) {
     const node = cs.nodes.find(n => n.id === id)
     if (!node) return
@@ -400,7 +418,7 @@
   </div>
 
   {#if contextMenu}
-    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
+    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
   {/if}
 
 

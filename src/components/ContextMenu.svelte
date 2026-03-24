@@ -21,10 +21,11 @@
   import { TOOL_PALETTE } from '../toolPalette'
   import '../canvas/ContextMenu.css'
 
-  let { menu, onDelete, onSetCommand, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onApplyPreset, consolePresets, onClose }: {
+  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onApplyPreset, consolePresets, onClose }: {
     menu: ContextMenuState
     onDelete: (type: 'node' | 'link', id: string) => void
     onSetCommand: (id: string) => void
+    onSetFolder: (id: string) => void
     onToggleActive: (id: string) => void
     onRestartConsole: (id: string) => void
     onDuplicateConsole: (id: string) => void
@@ -59,6 +60,7 @@
     <button class="context-menu-item" onclick={() => { onToggleActive(menu.targetId); onClose() }}>{menu.nodeActive ? 'Deactivate' : 'Activate'}</button>
     <button class="context-menu-item" onclick={() => { onTogglePersistent(menu.targetId); onClose() }}>{menu.nodePersistent ? 'Disable persistent' : 'Enable persistent'}</button>
     <button class="context-menu-item" onclick={() => { onSetCommand(menu.targetId); onClose() }}>Set default command</button>
+    <button class="context-menu-item" onclick={() => { onSetFolder(menu.targetId); onClose() }}>Set default folder</button>
     {#if consolePresets.length > 0}
       <div class="context-menu-submenu">
         <button class="context-menu-item">Presets <span style="float:right;opacity:0.5;">▸</span></button>
