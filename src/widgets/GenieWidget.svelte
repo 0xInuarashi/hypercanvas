@@ -132,7 +132,7 @@ Rules: Commands run from $HOME. Don't run destructive commands without instructi
   }
 
   async function send() {
-    if (!input.trim() || !llm.apiKey || genie.isRunning) return
+    if (!input.trim() || genie.isRunning) return
     const userMsg = input.trim()
     input = ''
 
@@ -212,8 +212,7 @@ Rules: Commands run from $HOME. Don't run destructive commands without instructi
       genie.chatHistory = runningHistory
     } catch (err) {
       if (controller.signal.aborted) genie.messages = [...genie.messages, { kind: 'text', role: 'assistant', content: '[cancelled by user]' }]
-      else if (err instanceof AuthError) { llm.clearApiKey(); genie.error = 'Invalid API key — please re-enter.' }
-      else genie.error = err instanceof Error ? err.message : 'Something went wrong'
+      else genie.error = 'API request failed. Set an OpenRouter API key in Settings (bottom-left cogwheel) for fallback.'
     } finally {
       genie.isRunning = false; deleteGenieAbort(nodeId)
     }
@@ -241,15 +240,6 @@ Rules: Commands run from $HOME. Don't run destructive commands without instructi
     {/snippet}
   </WidgetHeader>
 
-  {#if !llm.apiKey}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;" onpointerdown={(e) => e.stopPropagation()}>
-      <span style="color:#888;font-size:12px;font-family:monospace;text-align:center;">Enter your OpenRouter API key</span>
-      {#if llm.error}<span style="color:#ff6b6b;font-size:11px;font-family:monospace;">{llm.error}</span>{/if}
-      <input type="password" bind:value={llm.keyInput} onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Enter') llm.saveKey() }} placeholder="sk-or-..." style="width:100%;max-width:240px;padding:8px 10px;background:#1a1a2e;border:1px solid #3a3a5a;border-radius:6px;color:#e0e0e0;font-size:12px;font-family:monospace;outline:none;" />
-      <button onclick={() => llm.saveKey()} style="padding:6px 20px;background:#1a1a2e;border:1px solid #5a5a8a;border-radius:6px;color:#e0e0e0;font-size:12px;font-family:monospace;cursor:pointer;">Save</button>
-    </div>
-  {:else}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div bind:this={scrollEl} tabindex="-1" style="flex:1;overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px;user-select:text;outline:none;" onscroll={onScroll} onpointerdown={(e) => e.stopPropagation()} onmouseup={() => { const sel = window.getSelection()?.toString(); if (sel) clipboardWrite(sel) }}>
       {#if genie.messages.length === 0 && !genie.isRunning}
@@ -294,5 +284,4 @@ Rules: Commands run from $HOME. Don't run destructive commands without instructi
       <textarea bind:value={input} onkeydown={handleKeyDown} placeholder="What should Genie do?" rows="1" disabled={genie.isRunning} style="flex:1;resize:none;padding:8px 10px;background:#1a1a2e;border:1px solid #3a3a5a;border-radius:6px;color:#e0e0e0;font-size:12px;font-family:'JetBrains Mono','Fira Code',monospace;outline:none;max-height:60px;opacity:{genie.isRunning ? 0.5 : 1};"></textarea>
       <button onclick={send} disabled={genie.isRunning || !input.trim()} style="padding:0 12px;background:#1a1a2e;border:1px solid #5a5a8a;border-radius:6px;color:{genie.isRunning || !input.trim() ? '#555' : '#e0e0e0'};font-size:12px;font-family:monospace;cursor:{genie.isRunning || !input.trim() ? 'default' : 'pointer'};flex-shrink:0;">Go</button>
     </div>
-  {/if}
 </div>

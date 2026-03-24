@@ -170,7 +170,8 @@ export async function streamChatCompletion(
     // Fall through to OpenRouter fallback
   }
 
-  // Fallback: OpenRouter with user-provided key
+  // Fallback: OpenRouter with user-provided key (if available)
+  if (!apiKey) throw new ApiError('Primary API failed and no OpenRouter key configured')
   try {
     return await streamApi(messages, tools, apiKey, getPrimaryModel(), callbacks, signal, OPENROUTER_ENDPOINT)
   } catch (err) {
