@@ -189,6 +189,14 @@
     addLink(nodeId, 'right', memoId, 'left')
   }
 
+  function handleRunInConsole(nodeId: string, text: string) {
+    const node = cs.nodes.find(n => n.id === nodeId)
+    if (!node) return
+    const sz = getNodeSizes().console
+    const consoleId = addNode('console', node.x + node.width + 30, node.y, sz.w, sz.h, { label: text, active: true })
+    addLink(nodeId, 'right', consoleId, 'left')
+  }
+
   function onLinkContextMenu(linkId: string, e: MouseEvent) { contextMenu = { x: e.clientX, y: e.clientY, targetType: 'link', targetId: linkId }; selectedLinkId = linkId }
 
   function handleDelete(type: 'node' | 'link', id: string) {
@@ -432,7 +440,7 @@
   </div>
 
   {#if contextMenu}
-    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} onCopyToMemo={handleCopyToMemo} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
+    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} onCopyToMemo={handleCopyToMemo} onRunInConsole={handleRunInConsole} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
   {/if}
 
 
