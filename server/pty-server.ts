@@ -938,7 +938,8 @@ async function runUpdate(version: string, tarballUrl: string) {
     const tmpExtract = `/tmp/hypercanvas-${version}`
     const dlResp = await fetch(tarballUrl)
     if (!dlResp.ok) { updateProgress = { status: 'error', detail: '', error: `Download failed: ${dlResp.status}` }; return }
-    await Bun.write(tmpPath, dlResp)
+    const buf = await dlResp.arrayBuffer()
+    await Bun.write(tmpPath, buf)
 
     // Extract to temp dir first
     updateProgress = { status: 'installing', detail: 'Extracting...', error: null }
