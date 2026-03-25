@@ -360,6 +360,16 @@
       e.preventDefault()
       saveFile()
     }
+    if (!editing && (e.ctrlKey || e.metaKey) && e.key === 'a' && scrollEl) {
+      e.preventDefault()
+      const sel = window.getSelection()
+      if (sel) {
+        const range = document.createRange()
+        range.selectNodeContents(scrollEl)
+        sel.removeAllRanges()
+        sel.addRange(range)
+      }
+    }
   }}
 >
   <WidgetHeader icon={`</>`} iconColor="#c792ea">
