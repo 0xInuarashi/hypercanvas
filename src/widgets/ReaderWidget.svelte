@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import { HTTP_URL, authHeaders } from '../config'
   import WidgetHeader from '../components/WidgetHeader.svelte'
   import { langFromPath, lspKeyFromLang, LSP_SERVERS } from '../lib/readerLang'
   import { codeToHtml, type BundledLanguage } from 'shiki'
   import { getLspClient } from '../services/lspClient'
   import type { LspClient, Diagnostic } from '../services/lspClient'
-
   let { filePath, scrollLine, label: displayName, onGoToDefinition }: {
     filePath: string
     scrollLine?: number
@@ -29,6 +28,15 @@
   let hover = $state<{ x: number; y: number; text: string } | null>(null)
   let diagnostics = $state<Diagnostic[]>([])
   let hoverTimer: ReturnType<typeof setTimeout> | null = null
+
+  // Edit mode state
+  let editing = $state(false)
+  let dirty = $state(false)
+  let saving = $state(false)
+  let editContent = ''
+  let editorContainer = $state<HTMLDivElement>(undefined!)
+  let editorView: any = null
+  let savedLine = 1
 
   async function loadFile() {
     loading = true
@@ -113,7 +121,91 @@
     return result
   })
 
-  // LSP integration
+  // --- Edit mode ---
+
+  async function switchToEdit() {
+    if (truncated) { error = 'Cannot edit truncated files'; return }
+    // Save current scroll position as line number
+    if (scrollEl) {
+      savedLine = Math.floor(scrollEl.scrollTop / 19) + 1
+    }
+    editContent = content
+    dirty = false
+    editing = true
+    await tick()
+    if (editorContainer) {
+      try {
+        const { createEditor, scrollToLine: cmScrollTo } = await import('../lib/cmEditor')
+        editorView = await createEditor(
+          editorContainer,
+          content,
+          lang,
+          (doc) => { editContent = doc; dirty = true },
+          () => saveFile(),
+        )
+        // Scroll to approximate position
+        if (savedLine > 1) {
+          await cmScrollTo(editorView, savedLine)
+        }
+        editorView.focus()
+      } catch (e) {
+        console.error('CM6 init failed:', e)
+        error = 'Editor failed to load'
+        editing = false
+      }
+    }
+  }
+
+  async function switchToRead() {
+    if (dirty) {
+      if (!window.confirm('Discard unsaved changes?')) return
+    }
+    // Save CM6 scroll position
+    if (editorView) {
+      try {
+        const { getTopLine } = await import('../lib/cmEditor')
+        savedLine = getTopLine(editorView)
+      } catch { savedLine = 1 }
+      editorView.destroy()
+      editorView = null
+    }
+    editing = false
+    await tick()
+    // Restore scroll position in read mode
+    if (scrollEl && savedLine > 1) {
+      scrollEl.scrollTop = (savedLine - 1) * 19
+    }
+  }
+
+  async function saveFile() {
+    saving = true
+    error = null
+    try {
+      const res = await fetch(`${HTTP_URL}/write-file`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ path: filePath, content: editContent }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) { error = data.error || 'Save failed'; return }
+      content = editContent
+      totalLines = content.split('\n').length
+      dirty = false
+      await highlight()
+      // Update LSP
+      if (lspClient) {
+        lspClient.didClose(filePath)
+        lspClient.didOpen(filePath, lang, content)
+      }
+    } catch {
+      error = 'Save failed'
+    } finally {
+      saving = false
+    }
+  }
+
+  // --- LSP integration ---
+
   async function initLsp() {
     const lspKey = lspKeyFromLang(lang)
     if (!lspKey || !LSP_SERVERS[lspKey]) return
@@ -255,11 +347,21 @@
   onDestroy(() => {
     if (hoverTimer) clearTimeout(hoverTimer)
     if (lspClient) lspClient.didClose(filePath)
+    if (editorView) { editorView.destroy(); editorView = null }
   })
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div style="display:flex;flex-direction:column;width:100%;height:100%;" onkeydown={(e) => e.stopPropagation()}>
+<div
+  style="display:flex;flex-direction:column;width:100%;height:100%;"
+  onkeydown={(e) => {
+    e.stopPropagation()
+    if (editing && (e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault()
+      saveFile()
+    }
+  }}
+>
   <WidgetHeader icon={`</>`} iconColor="#c792ea">
     {#snippet label()}
       <span style="color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title={filePath}>
@@ -267,6 +369,21 @@
       </span>
     {/snippet}
     {#snippet children()}
+      {#if !loading}
+        <button
+          onpointerdown={(e) => e.stopPropagation()}
+          onclick={() => editing ? switchToRead() : switchToEdit()}
+          style="padding:1px 6px;border-radius:3px;border:1px solid {editing ? '#c792ea' : '#333'};background:{editing ? '#2a1a3a' : 'transparent'};color:{editing ? '#c792ea' : '#666'};font-size:10px;cursor:pointer;font-family:'JetBrains Mono',monospace;line-height:14px;flex-shrink:0;"
+        >{editing ? 'Read' : 'Edit'}</button>
+      {/if}
+      {#if editing && dirty}
+        <button
+          onpointerdown={(e) => e.stopPropagation()}
+          onclick={saveFile}
+          disabled={saving}
+          style="padding:1px 6px;border-radius:3px;border:1px solid #69db7c;background:#1a3a1a;color:#69db7c;font-size:10px;cursor:pointer;font-family:'JetBrains Mono',monospace;line-height:14px;flex-shrink:0;"
+        >{saving ? '...' : 'Save'}</button>
+      {/if}
       <span style="color:#555;font-size:10px;flex-shrink:0;">{lang}</span>
       {#if diagnostics.length > 0}
         <span style="color:#ff6b6b;font-size:10px;flex-shrink:0;" title="{diagnostics.length} issue{diagnostics.length > 1 ? 's' : ''}">{diagnostics.length}!</span>
@@ -277,40 +394,53 @@
     {/snippet}
   </WidgetHeader>
 
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    bind:this={scrollEl}
-    tabindex="-1"
-    style="flex:1;overflow:auto;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;background:#121212;position:relative;outline:none;"
-    onpointerdown={(e) => { e.stopPropagation(); scrollEl?.focus() }}
-  >
-    {#if loading}
-      <div style="padding:16px;color:#555;font-size:11px;">Loading...</div>
-    {:else if error}
-      <div style="padding:16px;color:#ff6b6b;font-size:11px;">{error}</div>
-    {:else}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        bind:this={codeEl}
-        style="padding:4px 0;cursor:text;user-select:text;"
-        onmousemove={handleHover}
-        onmouseleave={handleMouseLeave}
-        onclick={handleClick}
-      >
-        {@html renderedHtml}
-      </div>
-      {#if truncated}
-        <div style="padding:8px 12px;color:#666;font-size:10px;border-top:1px solid #1a1a1a;background:#0e0e0e;">
-          File truncated — showing first {content.split('\n').length} of {totalLines} lines
+  {#if error}
+    <div style="padding:4px 8px;color:#ff6b6b;font-size:10px;font-family:'JetBrains Mono',monospace;background:#1a0a0a;border-bottom:1px solid #2a1a1a;flex-shrink:0;">
+      {error}
+    </div>
+  {/if}
+
+  {#if editing}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      bind:this={editorContainer}
+      style="flex:1;overflow:hidden;background:#121212;"
+      onpointerdown={(e) => e.stopPropagation()}
+    ></div>
+  {:else}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      bind:this={scrollEl}
+      tabindex="-1"
+      style="flex:1;overflow:auto;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;background:#121212;position:relative;outline:none;"
+      onpointerdown={(e) => { e.stopPropagation(); scrollEl?.focus() }}
+    >
+      {#if loading}
+        <div style="padding:16px;color:#555;font-size:11px;">Loading...</div>
+      {:else}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          bind:this={codeEl}
+          style="padding:4px 0;cursor:text;user-select:text;"
+          onmousemove={handleHover}
+          onmouseleave={handleMouseLeave}
+          onclick={handleClick}
+        >
+          {@html renderedHtml}
+        </div>
+        {#if truncated}
+          <div style="padding:8px 12px;color:#666;font-size:10px;border-top:1px solid #1a1a1a;background:#0e0e0e;">
+            File truncated — showing first {content.split('\n').length} of {totalLines} lines
+          </div>
+        {/if}
+      {/if}
+
+      <!-- Hover tooltip -->
+      {#if hover}
+        <div style="position:fixed;left:{hover.x + 8}px;top:{hover.y - 40}px;max-width:500px;max-height:200px;overflow:auto;padding:6px 10px;background:#1a1a2e;border:1px solid #3a3a5a;border-radius:6px;color:#ccc;font-size:11px;font-family:'JetBrains Mono','Fira Code',monospace;white-space:pre-wrap;z-index:1000;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.5);">
+          {hover.text}
         </div>
       {/if}
-    {/if}
-
-    <!-- Hover tooltip -->
-    {#if hover}
-      <div style="position:fixed;left:{hover.x + 8}px;top:{hover.y - 40}px;max-width:500px;max-height:200px;overflow:auto;padding:6px 10px;background:#1a1a2e;border:1px solid #3a3a5a;border-radius:6px;color:#ccc;font-size:11px;font-family:'JetBrains Mono','Fira Code',monospace;white-space:pre-wrap;z-index:1000;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.5);">
-        {hover.text}
-      </div>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>

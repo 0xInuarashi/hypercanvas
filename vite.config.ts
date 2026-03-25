@@ -20,6 +20,17 @@ export default defineConfig({
     // Connecting directly bypasses the proxy entirely and works in all modes.
     '__PTY_PORT__': JSON.stringify(ptyPort),
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Force CM6 into its own chunk to work around Rolldown hash_placeholder
+        // panic with multi-byte unicode chars (ͼ from @codemirror/view style module)
+        manualChunks(id: string) {
+          if (id.includes('@codemirror') || id.includes('@lezer')) return 'codemirror'
+        },
+      },
+    },
+  },
   server: {
     host: process.env.HOST || 'localhost',
     allowedHosts: true,
