@@ -208,6 +208,17 @@
       if (sel) clipboardWrite(sel)
     })
 
+    // Preserve selection on scroll: xterm clears selection on wheel events.
+    // Intercept wheel, scroll manually, and prevent xterm from seeing it.
+    const onWheel = (e: WheelEvent) => {
+      if (t.hasSelection()) {
+        e.preventDefault()
+        e.stopPropagation()
+        t.scrollLines(e.deltaY > 0 ? 3 : -3)
+      }
+    }
+    containerEl.addEventListener('wheel', onWheel, { capture: true })
+
     const onCtxMenu = (e: Event) => {
       const sel = t.getSelection()
       if (sel && onTextContextMenu) {
@@ -231,6 +242,7 @@
     observer = obs
 
     return () => {
+      containerEl?.removeEventListener('wheel', onWheel, { capture: true })
       containerEl?.removeEventListener('contextmenu', onCtxMenu)
       obs.disconnect()
       t.dispose()
