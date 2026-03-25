@@ -14,6 +14,8 @@
   interface Entry { name: string; isDir: boolean }
   interface CtxMenu { x: number; y: number; path: string; isDir: boolean }
 
+  interface BgCtxMenu { x: number; y: number }
+
   let cwd = $state(initialPath || '~')
   let entries = $state<Entry[]>([])
   let resolvedPath = $state('')
@@ -21,6 +23,7 @@
   let loading = $state(false)
   let copied = $state<string | null>(null)
   let ctxMenu = $state<CtxMenu | null>(null)
+  let bgCtxMenu = $state<BgCtxMenu | null>(null)
   let listEl = $state<HTMLDivElement>(undefined!)
 
   async function fetchDir(path: string) {
@@ -62,6 +65,32 @@
     copied = path
     setTimeout(() => { copied = null }, 1500)
   }
+
+  async function createFile(inDir: string) {
+    const name = window.prompt('File name:')
+    if (!name?.trim()) return
+    try {
+      const res = await fetch(`${HTTP_URL}/write-file`, {
+        method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ path: inDir + '/' + name.trim(), content: '' }),
+      })
+      if (!res.ok) { const d = await res.json(); error = d.error || 'Failed'; return }
+      fetchDir(cwd)
+    } catch { error = 'Connection failed' }
+  }
+
+  async function createFolder(inDir: string) {
+    const name = window.prompt('Folder name:')
+    if (!name?.trim()) return
+    try {
+      const res = await fetch(`${HTTP_URL}/mkdir`, {
+        method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ path: inDir + '/' + name.trim() }),
+      })
+      if (!res.ok) { const d = await res.json(); error = d.error || 'Failed'; return }
+      fetchDir(cwd)
+    } catch { error = 'Connection failed' }
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -74,6 +103,7 @@
       {#if loading}
         <span style="color:#ffd43b;font-size:10px;flex-shrink:0;">loading...</span>
       {/if}
+      <button onclick={() => fetchDir(cwd)} onpointerdown={(e) => e.stopPropagation()} title="Refresh" style="background:none;border:none;color:#888;font-size:12px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">↻</button>
     {/snippet}
   </WidgetHeader>
 
@@ -114,12 +144,13 @@
     tabindex="-1"
     style="flex:1;overflow:auto;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;outline:none;"
     onpointerdown={(e) => { e.stopPropagation(); listEl?.focus() }}
+    oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); bgCtxMenu = { x: e.clientX, y: e.clientY } }}
   >
     {#each entries as entry}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        ondblclick={entry.isDir ? () => navigate(entry.name) : undefined}
+        ondblclick={entry.isDir ? () => navigate(entry.name) : onOpenInReader ? () => onOpenInReader!(resolvedPath + '/' + entry.name) : undefined}
         oncontextmenu={(e) => {
           e.preventDefault()
           e.stopPropagation()
@@ -132,7 +163,7 @@
         <span style="font-size:10px;width:14px;text-align:center;flex-shrink:0;">
           {entry.isDir ? '📁' : '📄'}
         </span>
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{entry.name}</span>
+        <span title={entry.name} style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{entry.name}</span>
       </div>
     {/each}
   </div>
@@ -148,6 +179,7 @@
         role="presentation"
       ></div>
       <div class="context-menu" style="left:{ctxMenu.x}px;top:{ctxMenu.y}px;">
+        <button class="context-menu-item" onclick={() => { fetchDir(cwd); ctxMenu = null }}>Refresh</button>
         <button
           class="context-menu-item"
           onclick={() => { clipboardWrite(ctxMenu!.path); copied = ctxMenu!.path; setTimeout(() => { copied = null }, 1500); ctxMenu = null }}
@@ -169,6 +201,25 @@
             onclick={() => { onOpenInReader!(ctxMenu!.path); ctxMenu = null }}
           >Open in reader</button>
         {/if}
+        <button class="context-menu-item" onclick={() => { createFile(ctxMenu!.isDir ? ctxMenu!.path : resolvedPath); ctxMenu = null }}>New file</button>
+        <button class="context-menu-item" onclick={() => { createFolder(ctxMenu!.isDir ? ctxMenu!.path : resolvedPath); ctxMenu = null }}>New folder</button>
+      </div>
+    </div>
+  {/if}
+
+  {#if bgCtxMenu}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div use:portal onpointerdown={(e) => e.stopPropagation()}>
+      <div
+        class="context-menu-backdrop"
+        onclick={() => bgCtxMenu = null}
+        oncontextmenu={(e) => { e.preventDefault(); bgCtxMenu = null }}
+        role="presentation"
+      ></div>
+      <div class="context-menu" style="left:{bgCtxMenu.x}px;top:{bgCtxMenu.y}px;">
+        <button class="context-menu-item" onclick={() => { fetchDir(cwd); bgCtxMenu = null }}>Refresh</button>
+        <button class="context-menu-item" onclick={() => { createFile(resolvedPath); bgCtxMenu = null }}>New file</button>
+        <button class="context-menu-item" onclick={() => { createFolder(resolvedPath); bgCtxMenu = null }}>New folder</button>
       </div>
     </div>
   {/if}

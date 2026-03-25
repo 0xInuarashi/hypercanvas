@@ -33,6 +33,7 @@ export default defineConfig({
       '/fetch': ptyTarget,
       '/read-file': ptyTarget,
       '/write-file': ptyTarget,
+      '/mkdir': ptyTarget,
       '/daemon': ptyTarget,
       '/satellite': ptyTarget,
       '/browse-proxy': ptyTarget,

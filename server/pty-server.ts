@@ -1038,7 +1038,7 @@ const server = Bun.serve<WsData>({
 
     // -- Auth gate for API endpoints --
     if (AUTH_TOKEN) {
-      const API_PATHS = ['/cloud', '/tree', '/find-dir', '/ls', '/exec', '/read-file', '/write-file', '/fetch', '/daemon', '/browse-proxy', '/satellite', '/update', '/lsp']
+      const API_PATHS = ['/cloud', '/tree', '/find-dir', '/ls', '/exec', '/read-file', '/write-file', '/mkdir', '/fetch', '/daemon', '/browse-proxy', '/satellite', '/update', '/lsp']
       if (API_PATHS.some(p => url.pathname.startsWith(p))) {
         const authHeader = req.headers.get('authorization') || ''
         const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
@@ -1289,6 +1289,22 @@ const server = Bun.serve<WsData>({
         return json({ content, totalLines: allLines.length, truncated, path: targetPath })
       } catch (err) {
         return json({ error: err instanceof Error ? err.message : 'read failed' }, 500)
+      }
+    }
+
+    // -- /mkdir --
+    if (req.method === 'POST' && url.pathname === '/mkdir') {
+      try {
+        const body = await req.json()
+        const home = process.env.HOME || '/'
+        const rawPath = body.path as string
+        if (!rawPath) return json({ error: 'Missing path' }, 400)
+        const targetPath = resolve(rawPath.startsWith('~') ? rawPath.replace('~', home) : rawPath)
+        if (!targetPath.startsWith(home)) return json({ error: `Path must be within ${home}` }, 400)
+        mkdirSync(targetPath, { recursive: true })
+        return json({ path: targetPath })
+      } catch (err) {
+        return json({ error: err instanceof Error ? err.message : 'mkdir failed' }, 500)
       }
     }
 

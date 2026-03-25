@@ -22,7 +22,7 @@
   import { TOOL_PALETTE } from '../toolPalette'
   import '../canvas/ContextMenu.css'
 
-  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onApplyPreset, onCopyToMemo, onRunInConsole, onOpenInReader, consolePresets, onClose }: {
+  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onPlaceConsolePreset, onApplyPreset, onCopyToMemo, onRunInConsole, onOpenInReader, consolePresets, onClose }: {
     menu: ContextMenuState
     onDelete: (type: 'node' | 'link', id: string) => void
     onSetCommand: (id: string) => void
@@ -38,6 +38,7 @@
     onShareSatellite: (id: string) => void
     onRevokeSatellite: (id: string) => void
     onPlaceTool: (type: NodeType, worldX: number, worldY: number) => void
+    onPlaceConsolePreset: (worldX: number, worldY: number, command: string) => void
     onApplyPreset: (id: string, command: string) => void
     onCopyToMemo: (id: string, text: string) => void
     onRunInConsole: (id: string, text: string) => void
@@ -54,9 +55,23 @@
   {#if menu.targetType === 'canvas'}
     <div class="context-menu-label">Add node</div>
     {#each TOOL_PALETTE as t}
-      <button class="context-menu-item" onclick={() => { onPlaceTool(t.type, menu.worldX!, menu.worldY!); onClose() }}>
-        <span style="margin-right:6px;font-size:10px;opacity:0.7">{t.icon}</span>{t.label}
-      </button>
+      {#if t.type === 'console' && consolePresets.length > 0}
+        <div class="context-menu-submenu">
+          <button class="context-menu-item"><span style="margin-right:6px;font-size:10px;opacity:0.7">{t.icon}</span>{t.label} <span style="float:right;opacity:0.5;">▸</span></button>
+          <div class="context-submenu">
+            <button class="context-menu-item" onclick={() => { onPlaceTool(t.type, menu.worldX!, menu.worldY!); onClose() }}>
+              <span style="opacity:0.5">Default</span>
+            </button>
+            {#each consolePresets as preset}
+              <button class="context-menu-item" onclick={() => { onPlaceConsolePreset(menu.worldX!, menu.worldY!, preset); onClose() }}>{preset}</button>
+            {/each}
+          </div>
+        </div>
+      {:else}
+        <button class="context-menu-item" onclick={() => { onPlaceTool(t.type, menu.worldX!, menu.worldY!); onClose() }}>
+          <span style="margin-right:6px;font-size:10px;opacity:0.7">{t.icon}</span>{t.label}
+        </button>
+      {/if}
     {/each}
   {/if}
   {#if menu.targetType === 'node' && menu.nodeType === 'console' && menu.selectedText}

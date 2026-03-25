@@ -312,6 +312,11 @@
     addNode(type, worldX, worldY, size.w, size.h)
   }
 
+  function handlePlaceConsolePreset(worldX: number, worldY: number, command: string) {
+    const size = getNodeSizes().console
+    addNode('console', worldX, worldY, size.w, size.h, { label: command })
+  }
+
   function getGridPosition(n: number): { col: number; row: number } {
     let remaining = n; let phase = 0
     while (true) { const size = Math.floor(phase / 2) + 1; if (remaining < size) { if (phase === 0) return { col: 0, row: 0 }; if (phase % 2 === 1) return { col: (phase + 1) >> 1, row: remaining }; return { col: remaining, row: phase >> 1 } }; remaining -= size; phase++ }
@@ -490,7 +495,7 @@
   </div>
 
   {#if contextMenu}
-    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} onCopyToMemo={handleCopyToMemo} onRunInConsole={handleRunInConsole} onOpenInReader={handleOpenInReader} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
+    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onPlaceConsolePreset={handlePlaceConsolePreset} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} onCopyToMemo={handleCopyToMemo} onRunInConsole={handleRunInConsole} onOpenInReader={handleOpenInReader} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
   {/if}
 
 
