@@ -1483,19 +1483,34 @@ const server = Bun.serve<WsData>({
 
     // -- LLM proxy (forward to Claude OAuth API) --
     if (url.pathname.startsWith('/__llm__/')) {
-      const target = 'https://claude-oauth-api-production.up.railway.app' + url.pathname.replace(/^\/__llm__/, '') + url.search
-      const proxyRes = await fetch(target, {
-        method: req.method,
-        headers: req.headers,
-        body: req.method === 'POST' ? req.body : undefined,
-        redirect: 'follow',
-      })
-      const resHeaders = new Headers(proxyRes.headers)
-      resHeaders.set('Access-Control-Allow-Origin', '*')
-      return new Response(proxyRes.body, {
-        status: proxyRes.status,
-        headers: resHeaders,
-      })
+      try {
+        const target = 'https://claude-oauth-api-production.up.railway.app' + url.pathname.replace(/^\/__llm__/, '') + url.search
+        const headers = new Headers(req.headers)
+        headers.delete('host') // don't forward PTY server's host to upstream
+        const proxyRes = await fetch(target, {
+          method: req.method,
+          headers,
+          body: req.method === 'POST' ? req.body : undefined,
+          redirect: 'follow',
+        })
+        const resHeaders = new Headers(proxyRes.headers)
+        // fetch() auto-decompresses gzip/br — strip stale encoding headers
+        resHeaders.delete('content-encoding')
+        resHeaders.delete('content-length')
+        resHeaders.delete('transfer-encoding')
+        resHeaders.set('Access-Control-Allow-Origin', '*')
+        return new Response(proxyRes.body, {
+          status: proxyRes.status,
+          statusText: proxyRes.statusText,
+          headers: resHeaders,
+        })
+      } catch (err) {
+        console.error('[LLM proxy]', err)
+        return new Response(JSON.stringify({ error: 'LLM proxy error', detail: err instanceof Error ? err.message : String(err) }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        })
+      }
     }
 
     // -- Serve built frontend (production) --
