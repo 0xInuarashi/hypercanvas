@@ -38,6 +38,16 @@ export function getSatelliteWsUrl(sessionId: string, password: string): string {
   return `${wsProto}//${ptyWsHost}/ws?satellite=${encodeURIComponent(sessionId)}&password=${encodeURIComponent(password)}`
 }
 
+const fishtankWsHost = `${loc.hostname}:${__FISHTANK_PORT__}`
+
+export function getFishtankWsUrl(sessionId: string, password: string): string {
+  return `${wsProto}//${fishtankWsHost}/ws?session=${encodeURIComponent(sessionId)}&password=${encodeURIComponent(password)}`
+}
+
+export function getFishtankHttpUrl(): string {
+  return `${loc.protocol}//${fishtankWsHost}`
+}
+
 // Clipboard helpers that fall back to execCommand for non-secure contexts (HTTP)
 export function clipboardWrite(text: string): void {
   if (navigator.clipboard?.writeText) {

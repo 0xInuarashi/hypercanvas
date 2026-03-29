@@ -172,7 +172,7 @@
   function onNodeContextMenu(nodeId: string, e: MouseEvent) {
     const node = cs.nodes.find((n) => n.id === nodeId)
     const isActive = node?.active
-    contextMenu = { x: e.clientX, y: e.clientY, targetType: 'node', targetId: nodeId, nodeType: node?.type, nodeActive: isActive, nodePersistent: node?.persistent, nodeShowEphemeral: node?.showEphemeral, nodeSessionId: node?.sessionId, nodeSatellitePassword: node?.satellitePassword }
+    contextMenu = { x: e.clientX, y: e.clientY, targetType: 'node', targetId: nodeId, nodeType: node?.type, nodeActive: isActive, nodePersistent: node?.persistent, nodeShowEphemeral: node?.showEphemeral, nodeSessionId: node?.sessionId, nodeSatellitePassword: node?.satellitePassword, nodeFishtankPassword: node?.fishtankPassword }
     selectedNodeIds = new Set([nodeId]); selectedLinkId = null
   }
 
@@ -293,6 +293,32 @@
       method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ sessionId: node.sessionId }),
     }).then(() => replaceNode(id, { satellitePassword: null })).catch(() => {})
+  }
+
+  function handleShareFishtank(id: string) {
+    const node = cs.nodes.find(n => n.id === id)
+    if (!node?.sessionId) return
+    const buf = new Uint8Array(32)
+    crypto.getRandomValues(buf)
+    const password = Array.from(buf, b => b.toString(16).padStart(2, '0')).join('')
+    fetch(`${HTTP_URL}/fishtank/enable`, {
+      method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ sessionId: node.sessionId, password }),
+    }).then(res => {
+      if (res.ok) {
+        replaceNode(id, { fishtankPassword: password })
+        clipboardWrite(`${window.location.origin}/?fishtank=${encodeURIComponent(node.sessionId!)}&password=${encodeURIComponent(password)}`)
+      }
+    }).catch(() => {})
+  }
+
+  function handleRevokeFishtank(id: string) {
+    const node = cs.nodes.find(n => n.id === id)
+    if (!node?.sessionId) return
+    fetch(`${HTTP_URL}/fishtank/disable`, {
+      method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ sessionId: node.sessionId }),
+    }).then(() => replaceNode(id, { fishtankPassword: null })).catch(() => {})
   }
 
   function handleProgramMacro(id: string) {
@@ -495,7 +521,7 @@
   </div>
 
   {#if contextMenu}
-    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onPlaceTool={handlePlaceTool} onPlaceConsolePreset={handlePlaceConsolePreset} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} onCopyToMemo={handleCopyToMemo} onRunInConsole={handleRunInConsole} onOpenInReader={handleOpenInReader} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
+    <ContextMenu menu={contextMenu} onDelete={handleDelete} onSetCommand={handleSetCommand} onSetFolder={handleSetFolder} onToggleActive={handleToggleActive} onRestartConsole={handleRestartConsole} onDuplicateConsole={handleDuplicateConsole} onSpawnConsole={handleSpawnConsole} onTogglePersistent={handleTogglePersistent} onProgramMacro={handleProgramMacro} onRenameMacro={handleRenameMacro} onToggleEphemeral={handleToggleEphemeral} onShareSatellite={handleShareSatellite} onRevokeSatellite={handleRevokeSatellite} onShareFishtank={handleShareFishtank} onRevokeFishtank={handleRevokeFishtank} onPlaceTool={handlePlaceTool} onPlaceConsolePreset={handlePlaceConsolePreset} onApplyPreset={(id, cmd) => updateNodeLabel(id, cmd)} onCopyToMemo={handleCopyToMemo} onRunInConsole={handleRunInConsole} onOpenInReader={handleOpenInReader} consolePresets={ss.userSettings.consolePresets?.filter(p => p.trim()) ?? []} onClose={() => contextMenu = null} />
   {/if}
 
 

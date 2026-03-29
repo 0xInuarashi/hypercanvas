@@ -10,12 +10,13 @@
   import WidgetHeader from '../components/WidgetHeader.svelte'
   import SatelliteShareModal from '../components/SatelliteShareModal.svelte'
 
-  let { active, defaultCommand, persistent = false, sessionId, satellitePassword, onSessionCreated, onOpenBrowser, onTextContextMenu }: {
+  let { active, defaultCommand, persistent = false, sessionId, satellitePassword, fishtankPassword, onSessionCreated, onOpenBrowser, onTextContextMenu }: {
     active: boolean
     defaultCommand: string
     persistent?: boolean
     sessionId?: string
     satellitePassword?: string | null
+    fishtankPassword?: string | null
     onSessionCreated?: (sessionId: string) => void
     onOpenBrowser?: (url: string) => void
     onTextContextMenu?: (text: string, e: MouseEvent) => void
@@ -290,7 +291,9 @@
   let satUrl = $derived(
     sessionId && satellitePassword
       ? `${window.location.origin}/?satellite=${encodeURIComponent(sessionId)}&password=${encodeURIComponent(satellitePassword)}`
-      : ''
+      : sessionId && fishtankPassword
+        ? `${window.location.origin}/?fishtank=${encodeURIComponent(sessionId)}&password=${encodeURIComponent(fishtankPassword)}`
+        : ''
   )
 </script>
 
@@ -311,12 +314,12 @@
       <span style="color:{focused ? '#ffd43b' : '#333'};font-size:7px;line-height:10px;">●</span>
       {#if persistent}
         <span style="color:#7c8fff;font-size:9px;padding:0 4px;background:#1a1a3a;border-radius:3px;line-height:14px;">
-          {satellitePassword ? 'satellite' : 'persist'}
+          {satellitePassword ? 'satellite' : fishtankPassword ? 'fishtank' : 'persist'}
         </span>
       {/if}
-      {#if persistent && satellitePassword && sessionId}
+      {#if persistent && sessionId && (satellitePassword || fishtankPassword)}
         <button
-          title="Open satellite link"
+          title={satellitePassword ? 'Open satellite link' : 'Open fishtank link'}
           style="display:inline-flex;align-items:center;gap:3px;color:#7c8fff;font-size:9px;background:#1a1a3a;border:none;border-radius:3px;padding:0 5px;cursor:pointer;flex-shrink:0;line-height:14px;font-family:inherit;"
           onpointerdown={(e) => { e.stopPropagation(); e.preventDefault() }}
           onclick={(e) => {
@@ -356,7 +359,7 @@
       click to start
     </div>
   {/if}
-  {#if satelliteAnchor && sessionId && satellitePassword}
+  {#if satelliteAnchor && sessionId && (satellitePassword || fishtankPassword)}
     <SatelliteShareModal
       url={satUrl}
       anchorRect={satelliteAnchor}

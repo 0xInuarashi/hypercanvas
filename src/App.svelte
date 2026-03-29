@@ -3,11 +3,14 @@
   import LoginGate from './components/LoginGate.svelte'
   import AppMain from './components/AppMain.svelte'
   import SatelliteView from './satellite/SatelliteView.svelte'
+  import FishtankView from './satellite/FishtankView.svelte'
 
   // Parsed once at module level
   const satParams = new URLSearchParams(window.location.search)
   const satSessionId = satParams.get('satellite')
   const satPassword = satParams.get('password') || undefined
+  const fishtankSessionId = satParams.get('fishtank')
+  const fishtankPassword = satParams.get('password') || undefined
 
   let authed = $state(false)
   let authChecked = $state(false)
@@ -24,7 +27,9 @@
   })
 </script>
 
-{#if satSessionId}
+{#if fishtankSessionId}
+  <FishtankView sessionId={fishtankSessionId} initialPassword={fishtankPassword} />
+{:else if satSessionId}
   <SatelliteView sessionId={satSessionId} initialPassword={satPassword} />
 {:else if !authChecked}
   <!-- loading -->

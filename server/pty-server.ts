@@ -158,10 +158,93 @@ interface DaemonSession {
   scrollbackBytes: number
   clients: Set<ServerWebSocket<WsData>>
   satellitePassword: string | null
+  fishtankPassword: string | null
 }
 
 const daemonSessions = new Map<string, DaemonSession>()
 const decoder = new TextDecoder()
+
+// ---------------------------------------------------------------------------
+// Fishtank relay — one-way output push to the separate fishtank server
+// ---------------------------------------------------------------------------
+
+const FISHTANK_PORT = PORT + 1
+let fishtankRelaySecret: string | null = null
+let fishtankRelayWs: WebSocket | null = null
+let fishtankProc: Subprocess | null = null
+
+function isProcessRunning(pid: number): boolean {
+  try { process.kill(pid, 0); return true } catch { return false }
+}
+
+function ensureFishtankServer() {
+  if (fishtankProc && isProcessRunning(fishtankProc.pid)) return
+  fishtankRelaySecret = randomUUID()
+  const serverPath = join(SCRIPT_DIR, 'fishtank-server.ts')
+  fishtankProc = Bun.spawn(['bun', 'run', serverPath], {
+    env: {
+      ...process.env,
+      FISHTANK_PORT: String(FISHTANK_PORT),
+      FISHTANK_HOST: HOST,
+      FISHTANK_RELAY_SECRET: fishtankRelaySecret,
+    },
+    stdout: 'inherit',
+    stderr: 'inherit',
+    onExit() {
+      fishtankProc = null
+      fishtankRelayWs = null
+    },
+  })
+  // Give the server a moment to start, then connect relay
+  setTimeout(connectFishtankRelay, 500)
+}
+
+function connectFishtankRelay() {
+  if (!fishtankRelaySecret) return
+  if (fishtankRelayWs?.readyState === WebSocket.OPEN) return
+  const ws = new WebSocket(`ws://127.0.0.1:${FISHTANK_PORT}/ws?relay=${encodeURIComponent(fishtankRelaySecret)}`)
+  ws.onopen = () => {
+    fishtankRelayWs = ws
+    // Re-register all fishtank sessions on reconnect (e.g. after PTY server restart)
+    for (const session of daemonSessions.values()) {
+      if (session.fishtankPassword) {
+        fishtankRelaySend({
+          type: 'session:add',
+          sessionId: session.id,
+          password: session.fishtankPassword,
+          scrollback: session.scrollback,
+        })
+      }
+    }
+  }
+  ws.onclose = () => {
+    fishtankRelayWs = null
+    // Reconnect if the fishtank server is still running
+    if (fishtankProc && isProcessRunning(fishtankProc.pid)) {
+      setTimeout(connectFishtankRelay, 1000)
+    }
+  }
+  ws.onerror = () => {}
+}
+
+function fishtankRelaySend(msg: object) {
+  if (fishtankRelayWs?.readyState === WebSocket.OPEN) {
+    fishtankRelayWs.send(JSON.stringify(msg))
+  }
+}
+
+function killFishtankServer() {
+  if (fishtankRelayWs) { fishtankRelayWs.close(); fishtankRelayWs = null }
+  if (fishtankProc && isProcessRunning(fishtankProc.pid)) { fishtankProc.kill(); fishtankProc = null }
+  fishtankRelaySecret = null
+}
+
+function hasFishtankSessions(): boolean {
+  for (const session of daemonSessions.values()) {
+    if (session.fishtankPassword) return true
+  }
+  return false
+}
 
 // ---------------------------------------------------------------------------
 // LSP session registry
@@ -546,6 +629,11 @@ function broadcastDaemon(session: DaemonSession, msg: object) {
   for (const c of session.clients) {
     if (c.readyState === 1) c.send(payload)
   }
+  // Relay to fishtank server if this session is promoted
+  if (session.fishtankPassword) {
+    const relayMsg = msg as Record<string, unknown>
+    fishtankRelaySend({ ...relayMsg, sessionId: session.id })
+  }
 }
 
 function spawnDaemon(session: DaemonSession) {
@@ -603,6 +691,7 @@ function handleDaemonMessage(ws: ServerWebSocket<WsData>, parsed: Record<string,
       scrollbackBytes: 0,
       clients: new Set([ws]),
       satellitePassword: null,
+      fishtankPassword: null,
     }
     spawnDaemon(session)
     daemonSessions.set(session.id, session)
@@ -1389,6 +1478,7 @@ const server = Bun.serve<WsData>({
         if (!password) return json({ error: 'Missing password' }, 400)
         const session = daemonSessions.get(body.sessionId)
         if (!session) return json({ error: 'Session not found' }, 404)
+        if (session.fishtankPassword) return json({ error: 'Disable fishtank first' }, 409)
         session.satellitePassword = password
         return json({ ok: true })
       } catch (err) {
@@ -1406,6 +1496,50 @@ const server = Bun.serve<WsData>({
           if (c.data.mode === 'satellite' && c.readyState === 1) {
             c.close(1000, 'Satellite revoked')
           }
+        }
+        return json({ ok: true })
+      } catch (err) {
+        return json({ error: err instanceof Error ? err.message : 'Failed' }, 500)
+      }
+    }
+
+    // -- Fishtank endpoints --
+
+    if (req.method === 'POST' && url.pathname === '/fishtank/enable') {
+      try {
+        const body = await req.json()
+        const password = (body.password as string || '').trim()
+        if (!password) return json({ error: 'Missing password' }, 400)
+        const session = daemonSessions.get(body.sessionId)
+        if (!session) return json({ error: 'Session not found' }, 404)
+        if (session.satellitePassword) return json({ error: 'Disable satellite first' }, 409)
+        session.fishtankPassword = password
+        ensureFishtankServer()
+        // Wait briefly for relay to connect, then register session
+        setTimeout(() => {
+          fishtankRelaySend({
+            type: 'session:add',
+            sessionId: session.id,
+            password,
+            scrollback: session.scrollback,
+          })
+        }, 800)
+        return json({ ok: true, port: FISHTANK_PORT })
+      } catch (err) {
+        return json({ error: err instanceof Error ? err.message : 'Failed' }, 500)
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/fishtank/disable') {
+      try {
+        const body = await req.json()
+        const session = daemonSessions.get(body.sessionId)
+        if (!session) return json({ error: 'Session not found' }, 404)
+        session.fishtankPassword = null
+        fishtankRelaySend({ type: 'session:remove', sessionId: session.id })
+        // Kill fishtank server if no sessions remain
+        if (!hasFishtankSessions()) {
+          setTimeout(killFishtankServer, 500)
         }
         return json({ ok: true })
       } catch (err) {
@@ -1684,6 +1818,8 @@ function shutdown() {
   for (const [port] of browseProxies) {
     destroyBrowseProxy(port)
   }
+
+  killFishtankServer()
 
   server.stop()
 

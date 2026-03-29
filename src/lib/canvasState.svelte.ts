@@ -15,7 +15,7 @@ memo: { w: 300, h: 250 },
 const STORAGE_KEY = 'hypercanvas'
 
 export function stripRuntimeState(node: CanvasNode): CanvasNode {
-  const { active, satellitePassword: _, ...rest } = node
+  const { active, satellitePassword: _, fishtankPassword: _f, ...rest } = node
   const shouldActivate = node.type === 'console' && node.sessionId
   return { ...rest, active: shouldActivate ? true : false }
 }

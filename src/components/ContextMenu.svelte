@@ -12,6 +12,7 @@
     nodeShowEphemeral?: boolean
     nodeSessionId?: string
     nodeSatellitePassword?: string | null
+    nodeFishtankPassword?: string | null
     worldX?: number
     worldY?: number
     selectedText?: string
@@ -22,7 +23,7 @@
   import { TOOL_PALETTE } from '../toolPalette'
   import '../canvas/ContextMenu.css'
 
-  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onPlaceTool, onPlaceConsolePreset, onApplyPreset, onCopyToMemo, onRunInConsole, onOpenInReader, consolePresets, onClose }: {
+  let { menu, onDelete, onSetCommand, onSetFolder, onToggleActive, onRestartConsole, onDuplicateConsole, onSpawnConsole, onTogglePersistent, onProgramMacro, onRenameMacro, onToggleEphemeral, onShareSatellite, onRevokeSatellite, onShareFishtank, onRevokeFishtank, onPlaceTool, onPlaceConsolePreset, onApplyPreset, onCopyToMemo, onRunInConsole, onOpenInReader, consolePresets, onClose }: {
     menu: ContextMenuState
     onDelete: (type: 'node' | 'link', id: string) => void
     onSetCommand: (id: string) => void
@@ -37,6 +38,8 @@
     onToggleEphemeral: (id: string) => void
     onShareSatellite: (id: string) => void
     onRevokeSatellite: (id: string) => void
+    onShareFishtank: (id: string) => void
+    onRevokeFishtank: (id: string) => void
     onPlaceTool: (type: NodeType, worldX: number, worldY: number) => void
     onPlaceConsolePreset: (worldX: number, worldY: number, command: string) => void
     onApplyPreset: (id: string, command: string) => void
@@ -99,8 +102,11 @@
     {#if menu.nodePersistent && menu.nodeSessionId}
       {#if menu.nodeSatellitePassword}
         <button class="context-menu-item" onclick={() => { onRevokeSatellite(menu.targetId); onClose() }}>Revoke Satellite</button>
+      {:else if menu.nodeFishtankPassword}
+        <button class="context-menu-item" onclick={() => { onRevokeFishtank(menu.targetId); onClose() }}>Revoke Fishtank</button>
       {:else}
         <button class="context-menu-item" onclick={() => { onShareSatellite(menu.targetId); onClose() }}>Share as Satellite</button>
+        <button class="context-menu-item" onclick={() => { onShareFishtank(menu.targetId); onClose() }}>Share as Fishtank</button>
       {/if}
     {/if}
     <button class="context-menu-item" onclick={(e) => { onDuplicateConsole(menu.targetId); if (!e.shiftKey) onClose() }}>Duplicate</button>

@@ -3,7 +3,9 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { readFileSync, existsSync } from 'node:fs'
 
 const ptyPort = process.env.PORT || '7888'
+const fishtankPort = String(parseInt(ptyPort, 10) + 1)
 const ptyTarget = `http://localhost:${ptyPort}`
+const fishtankTarget = `http://localhost:${fishtankPort}`
 
 const appVersion = existsSync('VERSION')
   ? readFileSync('VERSION', 'utf-8').trim()
@@ -19,6 +21,7 @@ export default defineConfig({
     // on outgoing requests, which breaks Vite's http-proxy-3 WS proxy silently.
     // Connecting directly bypasses the proxy entirely and works in all modes.
     '__PTY_PORT__': JSON.stringify(ptyPort),
+    '__FISHTANK_PORT__': JSON.stringify(fishtankPort),
   },
   build: {
     rolldownOptions: {
@@ -47,6 +50,7 @@ export default defineConfig({
       '/mkdir': ptyTarget,
       '/daemon': ptyTarget,
       '/satellite': ptyTarget,
+      '/fishtank': ptyTarget,
       '/browse-proxy': ptyTarget,
       '/update': ptyTarget,
       '/lsp': ptyTarget,

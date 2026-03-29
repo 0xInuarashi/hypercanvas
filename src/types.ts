@@ -14,6 +14,7 @@ export interface CanvasNode {
   sessionId?: string
   showEphemeral?: boolean
   satellitePassword?: string | null
+  fishtankPassword?: string | null
   filePath?: string
   scrollLine?: number
 }
