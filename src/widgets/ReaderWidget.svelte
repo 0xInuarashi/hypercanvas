@@ -33,6 +33,7 @@
   let editing = $state(false)
   let dirty = $state(false)
   let saving = $state(false)
+  let refreshing = $state(false)
   let editContent = ''
   let editorContainer = $state<HTMLDivElement>(undefined!)
   let editorView: any = null
@@ -53,10 +54,15 @@
       totalLines = data.totalLines
       truncated = data.truncated
       await highlight()
+      if (lspClient) {
+        lspClient.didClose(filePath)
+        lspClient.didOpen(filePath, lang, content)
+      }
     } catch {
       error = 'Connection failed'
     } finally {
       loading = false
+      refreshing = false
     }
   }
 
@@ -202,6 +208,14 @@
     } finally {
       saving = false
     }
+  }
+
+  async function refreshFile() {
+    if (editing && dirty) {
+      if (!window.confirm('Discard unsaved changes?')) return
+    }
+    refreshing = true
+    await loadFile()
   }
 
   // --- LSP integration ---
@@ -385,6 +399,15 @@
           onclick={() => editing ? switchToRead() : switchToEdit()}
           style="padding:1px 6px;border-radius:3px;border:1px solid {editing ? '#c792ea' : '#333'};background:{editing ? '#2a1a3a' : 'transparent'};color:{editing ? '#c792ea' : '#666'};font-size:10px;cursor:pointer;font-family:'JetBrains Mono',monospace;line-height:14px;flex-shrink:0;"
         >{editing ? 'Read' : 'Edit'}</button>
+      {/if}
+      {#if !editing}
+        <button
+          onpointerdown={(e) => e.stopPropagation()}
+          onclick={refreshFile}
+          disabled={loading || refreshing}
+          title="Reload file from disk"
+          style="padding:1px 6px;border-radius:3px;border:1px solid #333;background:transparent;color:{refreshing ? '#ffd43b' : '#666'};font-size:10px;cursor:pointer;font-family:'JetBrains Mono',monospace;line-height:14px;flex-shrink:0;"
+        >{refreshing ? '...' : '↺'}</button>
       {/if}
       {#if editing && dirty}
         <button
