@@ -14,8 +14,12 @@ memo: { w: 300, h: 250 },
 
 const STORAGE_KEY = 'hypercanvas'
 
+// Temporary satellite restoration data — keyed by nodeId, used during console restart
+// to transfer satellite/fishtank session from the destroyed old session to the new session.
+export const pendingSatRestore = new Map<string, { sessionId: string; satPassword?: string; fishPassword?: string }>()
+
 export function stripRuntimeState(node: CanvasNode): CanvasNode {
-  const { active, satellitePassword: _, fishtankPassword: _f, ...rest } = node
+  const { active, ...rest } = node
   const shouldActivate = node.type === 'console' && node.sessionId
   return { ...rest, active: shouldActivate ? true : false }
 }
@@ -31,6 +35,8 @@ function loadState(): WorkspacesState | null {
       return { version: 2, activeWorkspaceId: 1, nextWorkspaceId: 2, nextId: parsed.nextId ?? 0, nextLinkId: parsed.nextLinkId ?? 0,
         workspaces: [{ id: 1, name: '1', nodes: oldNodes, links: oldLinks, bgColor: parsed.bgColor ?? '#0a0a0a', viewport: { offsetX: 0, offsetY: 0, scale: 1 } }] }
     }
+    const consoles = (parsed as WorkspacesState).workspaces.flatMap(w => w.nodes.filter((n: any) => n.type === 'console' && (n.sessionId || n.satellitePassword || n.fishtankPassword)))
+    if (consoles.length) console.log('[DBG] loadState from localStorage — consoles:', consoles.map((n: any) => ({ id: n.id, sessionId: n.sessionId, satPwd: n.satellitePassword ? 'SET' : 'null', fishPwd: n.fishtankPassword ? 'SET' : 'null' })))
     return parsed as WorkspacesState
   } catch (err) { console.warn('failed to load saved state:', err); return null }
 }
@@ -113,7 +119,10 @@ export async function setCloudCanvas(enabled: boolean, mode?: 'overwrite' | 'loa
 }
 
 function applyLoadedState(loaded: WorkspacesState) {
+  console.log('[DBG] applyLoadedState called')
   const activeWs = loaded.workspaces.find(w => w.id === loaded.activeWorkspaceId) ?? loaded.workspaces[0]
+  const rawConsoles = activeWs?.nodes.filter(n => n.type === 'console') ?? []
+  rawConsoles.forEach(n => console.log(`[DBG] applyLoadedState BEFORE strip: node=${n.id} sessionId=${n.sessionId} satPwd=${n.satellitePassword ? 'SET' : 'null'} fishPwd=${n.fishtankPassword ? 'SET' : 'null'}`))
   cs.workspaces = loaded.workspaces
   cs.activeWorkspaceId = loaded.activeWorkspaceId
   cs.nextWorkspaceId = loaded.nextWorkspaceId
@@ -126,6 +135,8 @@ function applyLoadedState(loaded: WorkspacesState) {
 }
 
 function buildCurrentState(): WorkspacesState {
+  const consoles = cs.nodes.filter(n => n.type === 'console' && (n.sessionId || n.satellitePassword || n.fishtankPassword))
+  if (consoles.length) console.log('[DBG] buildCurrentState (save) — console nodes BEFORE strip:', consoles.map(n => ({ id: n.id, sessionId: n.sessionId, satPwd: n.satellitePassword ? 'SET' : 'null', fishPwd: n.fishtankPassword ? 'SET' : 'null' })))
   const viewport = viewportActions?.getViewport() ?? { offsetX: 0, offsetY: 0, scale: 1 }
   const existingWs = cs.workspaces.find((w) => w.id === cs.activeWorkspaceId)
   const currentWs: WorkspaceData = { id: cs.activeWorkspaceId, name: existingWs?.name ?? String(cs.activeWorkspaceId), nodes: cs.nodes.map(stripRuntimeState), links: cs.links, bgColor: cs.bgColor, viewport, snaps: existingWs?.snaps }
@@ -213,13 +224,33 @@ export function addLink(fromNodeId: string, fromSide: PortSide, toNodeId: string
 export function deleteLink(id: string) { cs.links = cs.links.filter((l) => l.id !== id) }
 export function updateNodeLabel(id: string, label: string) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, label } : n)) }
 export function updateNodeScript(id: string, script: string) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, script } : n)) }
-export function replaceNode(id: string, newProps: Partial<CanvasNode>) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, ...newProps } : n)) }
+export function replaceNode(id: string, newProps: Partial<CanvasNode>) {
+  if ('sessionId' in newProps || 'satellitePassword' in newProps || 'fishtankPassword' in newProps) {
+    const old = cs.nodes.find(n => n.id === id)
+    console.log(`[DBG] replaceNode node=${id} changes:`, { sessionId: 'sessionId' in newProps ? `${old?.sessionId} → ${newProps.sessionId}` : '(unchanged)', satPwd: 'satellitePassword' in newProps ? `${old?.satellitePassword ? 'SET' : 'null'} → ${newProps.satellitePassword ? 'SET' : 'null'}` : '(unchanged)', fishPwd: 'fishtankPassword' in newProps ? `${old?.fishtankPassword ? 'SET' : 'null'} → ${newProps.fishtankPassword ? 'SET' : 'null'}` : '(unchanged)' }, new Error().stack?.split('\n').slice(1, 4).join('\n'))
+  }
+  cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, ...newProps } : n))
+}
 export function toggleNodeActive(id: string, active: boolean) {
+  console.log(`[DBG] toggleNodeActive id=${id} active=${active}`, (() => { const n = cs.nodes.find(n => n.id === id); return `type=${n?.type} persistent=${n?.persistent} sessionId=${n?.sessionId} satPwd=${n?.satellitePassword ? 'SET' : 'null'}` })())
   if (!active) {
     const node = cs.nodes.find((n) => n.id === id)
     if (node?.type === 'console' && node.sessionId) {
+      if (node.persistent) {
+        console.log(`[DBG] toggleNodeActive PERSISTENT — keeping session alive`)
+        // Persistent consoles: keep daemon alive, just disconnect local UI
+        cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, active } : n))
+        return
+      }
+      // Non-persistent: destroy session and clean up share state
+      if (node.satellitePassword) {
+        fetch(`${HTTP_URL}/satellite/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: node.sessionId }) }).catch(() => {})
+      }
+      if (node.fishtankPassword) {
+        fetch(`${HTTP_URL}/fishtank/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: node.sessionId }) }).catch(() => {})
+      }
       fetch(`${HTTP_URL}/daemon/destroy`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: node.sessionId }) }).catch((err) => console.warn('daemon destroy failed:', err))
-      cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, active, sessionId: undefined } : n))
+      cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, active, sessionId: undefined, satellitePassword: null, fishtankPassword: null } : n))
       return
     }
   }
@@ -308,6 +339,7 @@ export function deleteSnap(slot: number) {
 // --- Persist ---
 
 export function persistState() {
+  console.log('[DBG] persistState called')
   const state = buildCurrentState()
   if (cloudEnabled) {
     saveCloudState(state)

@@ -7,16 +7,18 @@
   import { getWsUrl, clipboardWrite, clipboardRead } from '../config'
   import { TERMINAL_THEME } from '../canvas/terminalTheme'
   import { parseWsMessage } from '../canvas/wsTypes'
+  import { pendingSatRestore } from '../lib/canvasState.svelte'
   import WidgetHeader from '../components/WidgetHeader.svelte'
   import SatelliteShareModal from '../components/SatelliteShareModal.svelte'
 
-  let { active, defaultCommand, persistent = false, sessionId, satellitePassword, fishtankPassword, onSessionCreated, onOpenBrowser, onTextContextMenu }: {
+  let { active, defaultCommand, persistent = false, sessionId, satellitePassword, fishtankPassword, nodeId, onSessionCreated, onOpenBrowser, onTextContextMenu }: {
     active: boolean
     defaultCommand: string
     persistent?: boolean
     sessionId?: string
     satellitePassword?: string | null
     fishtankPassword?: string | null
+    nodeId: string
     onSessionCreated?: (sessionId: string) => void
     onOpenBrowser?: (url: string) => void
     onTextContextMenu?: (text: string, e: MouseEvent) => void
@@ -71,9 +73,10 @@
   })
 
   function connect() {
-    if (ws) return
-    if (!term) return
+    if (ws) { console.log('[DBG] ConsoleWidget.connect() SKIP: ws already exists'); return }
+    if (!term) { console.log('[DBG] ConsoleWidget.connect() SKIP: no term'); return }
 
+    console.log(`[DBG] ConsoleWidget.connect() sessionId=${sessionId} persistent=${persistent} satPwd=${satellitePassword ? 'SET' : 'null'} fishPwd=${fishtankPassword ? 'SET' : 'null'}`)
     const socket = new WebSocket(getWsUrl())
     ws = socket
 
@@ -82,9 +85,19 @@
       status = 'connected'
 
       if (sessionId) {
+        console.log(`[DBG] ConsoleWidget WS open → daemon:attach sessionId=${sessionId}`)
         socket.send(JSON.stringify({ type: 'daemon:attach', sessionId }))
       } else {
-        socket.send(JSON.stringify({ type: 'daemon:create', command: '' }))
+        // Check for pending satellite/fishtank restoration (console restart scenario)
+        const restore = pendingSatRestore.get(nodeId)
+        if (restore) {
+          console.log(`[DBG] ConsoleWidget WS open → daemon:create WITH RESTORE previousSessionId=${restore.sessionId} satPwd=${restore.satPassword ? 'SET' : 'null'} fishPwd=${restore.fishPassword ? 'SET' : 'null'}`)
+          pendingSatRestore.delete(nodeId)
+          socket.send(JSON.stringify({ type: 'daemon:create', command: '', previousSessionId: restore.sessionId, restoredSatPassword: restore.satPassword, restoredFishPassword: restore.fishPassword }))
+        } else {
+          console.log('[DBG] ConsoleWidget WS open → daemon:create (no sessionId)')
+          socket.send(JSON.stringify({ type: 'daemon:create', command: '' }))
+        }
       }
       if (term) socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
     }
@@ -98,7 +111,8 @@
       if (msg.type === 'output') {
         term?.write(msg.data)
       } else if (msg.type === 'daemon:created') {
-        onSessionCreated?.(msg.sessionId)
+        console.log(`[DBG] ConsoleWidget daemon:created newSessionId=${msg.sessionId} (old=${sessionId}) restoredSatPwd=${msg.restoredSatPassword ? 'SET' : 'null'} restoredFishPwd=${msg.restoredFishPassword ? 'SET' : 'null'}`)
+        onSessionCreated?.(msg.sessionId, msg.restoredSatPassword, msg.restoredFishPassword)
         if (defaultCommand) {
           setTimeout(() => {
             if (socket.readyState === WebSocket.OPEN) {
@@ -107,10 +121,13 @@
           }, 200)
         }
       } else if (msg.type === 'daemon:attached') {
+        console.log(`[DBG] ConsoleWidget daemon:attached sessionId=${msg.sessionId} status=${msg.status} exitCode=${msg.exitCode}`)
         if (msg.status === 'stopped' || msg.status === 'error') {
+          console.log(`[DBG] ConsoleWidget session stopped/error → creating new session`)
           socket.send(JSON.stringify({ type: 'daemon:create', command: '' }))
         }
       } else if (msg.type === 'daemon:status') {
+        console.log(`[DBG] ConsoleWidget daemon:status status=${msg.status}`)
         if (msg.status === 'stopped' || msg.status === 'error') {
           status = 'stopped'
           term?.write('\r\n\x1b[33m[shell exited]\x1b[0m\r\n')
@@ -118,7 +135,9 @@
           status = 'connected'
         }
       } else if (msg.type === 'daemon:error') {
+        console.log(`[DBG] ConsoleWidget daemon:error message=${msg.message}`)
         if (msg.message === 'Session not found') {
+          console.log(`[DBG] ConsoleWidget session not found → creating new session`)
           socket.send(JSON.stringify({ type: 'daemon:create', command: '' }))
         } else {
           term?.write(`\x1b[31m[${msg.message}]\x1b[0m\r\n`)
@@ -127,6 +146,7 @@
     }
 
     socket.onclose = () => {
+      console.log(`[DBG] ConsoleWidget WS close sessionId=${sessionId} persistent=${persistent}`)
       ws = null
       if (sessionId) {
         status = 'disconnected'
@@ -142,6 +162,7 @@
     }
 
     socket.onerror = () => {
+      console.log('[DBG] ConsoleWidget WS error')
       term?.write('\x1b[31m[connection failed — is the PTY server running?]\x1b[0m\r\n')
     }
   }
@@ -288,13 +309,15 @@
     : undefined
   )
 
-  let satUrl = $derived(
-    sessionId && satellitePassword
+  let satUrl = $derived.by(() => {
+    const url = sessionId && satellitePassword
       ? `${window.location.origin}/?satellite=${encodeURIComponent(sessionId)}&password=${encodeURIComponent(satellitePassword)}`
       : sessionId && fishtankPassword
         ? `${window.location.origin}/?fishtank=${encodeURIComponent(sessionId)}&password=${encodeURIComponent(fishtankPassword)}`
         : ''
-  )
+    console.log(`[DBG] ConsoleWidget satUrl derived: sessionId=${sessionId} satPwd=${satellitePassword ? 'SET' : 'null'} fishPwd=${fishtankPassword ? 'SET' : 'null'} → url=${url ? url.slice(0, 60) + '...' : '(empty)'}`)
+    return url
+  })
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->

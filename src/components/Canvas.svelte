@@ -6,6 +6,7 @@
     updateNodeLabel, updateNodeScript, toggleNodeActive, replaceNode,
     addNode, setViewportActions, cancelPendingDestroys, clearActiveTool,
     recallSnap, deleteSnap, fullscreenState,
+    pendingSatRestore,
   } from '../lib/canvasState.svelte'
   import { getNodeSizes, ss } from '../lib/settingsState.svelte'
   import { pushUndo } from '../lib/historyManager.svelte'
@@ -232,13 +233,29 @@
   function handleRestartConsole(id: string) {
     const node = cs.nodes.find(n => n.id === id)
     if (!node) return
-    if (node.sessionId) {
+    const oldSatPassword = node.satellitePassword ?? undefined
+    const oldFishPassword = node.fishtankPassword ?? undefined
+    const oldSessionId = node.sessionId
+    if (oldSessionId) {
+      if (node.satellitePassword) {
+        fetch(`${HTTP_URL}/satellite/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: oldSessionId }) }).catch(() => {})
+      }
+      if (node.fishtankPassword) {
+        fetch(`${HTTP_URL}/fishtank/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: oldSessionId }) }).catch(() => {})
+      }
       fetch(`${HTTP_URL}/daemon/destroy`, {
         method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ sessionId: node.sessionId }),
+        body: JSON.stringify({ sessionId: oldSessionId }),
       }).catch(() => {})
     }
-    replaceNode(id, { active: false, sessionId: undefined })
+    if (oldSessionId) {
+      pendingSatRestore.set(id, {
+        sessionId: oldSessionId,
+        satPassword: oldSatPassword,
+        fishPassword: oldFishPassword,
+      })
+    }
+    replaceNode(id, { active: false, sessionId: undefined, satellitePassword: null, fishtankPassword: null })
     setTimeout(() => toggleNodeActive(id, true), 50)
   }
 
@@ -253,12 +270,18 @@
     pushUndo('Toggle persistent')
     if (node.persistent) {
       if (node.sessionId) {
+        if (node.satellitePassword) {
+          fetch(`${HTTP_URL}/satellite/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: node.sessionId }) }).catch(() => {})
+        }
+        if (node.fishtankPassword) {
+          fetch(`${HTTP_URL}/fishtank/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: node.sessionId }) }).catch(() => {})
+        }
         fetch(`${HTTP_URL}/daemon/destroy`, {
           method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ sessionId: node.sessionId }),
         }).catch(() => {})
       }
-      replaceNode(id, { persistent: false, sessionId: undefined, active: false })
+      replaceNode(id, { persistent: false, sessionId: undefined, satellitePassword: null, fishtankPassword: null, active: false })
     } else {
       replaceNode(id, { persistent: true })
     }
@@ -271,54 +294,70 @@
 
   function handleShareSatellite(id: string) {
     const node = cs.nodes.find(n => n.id === id)
-    if (!node?.sessionId) return
+    console.log(`[DBG] handleShareSatellite id=${id} sessionId=${node?.sessionId} currentSatPwd=${node?.satellitePassword ? 'SET' : 'null'} currentFishPwd=${node?.fishtankPassword ? 'SET' : 'null'}`)
+    if (!node?.sessionId) { console.log('[DBG] handleShareSatellite ABORTED: no sessionId'); return }
     const buf = new Uint8Array(32)
     crypto.getRandomValues(buf)
     const password = Array.from(buf, b => b.toString(16).padStart(2, '0')).join('')
+    const url = `${window.location.origin}/?satellite=${encodeURIComponent(node.sessionId!)}&password=${encodeURIComponent(password)}`
+    console.log(`[DBG] handleShareSatellite POSTing /satellite/enable sessionId=${node.sessionId} newPwd=${password.slice(0, 8)}...`)
     fetch(`${HTTP_URL}/satellite/enable`, {
       method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ sessionId: node.sessionId, password }),
     }).then(res => {
+      console.log(`[DBG] handleShareSatellite response: ${res.status} ${res.statusText}`)
       if (res.ok) {
         replaceNode(id, { satellitePassword: password })
-        clipboardWrite(`${window.location.origin}/?satellite=${encodeURIComponent(node.sessionId!)}&password=${encodeURIComponent(password)}`)
+        clipboardWrite(url)
+        console.log(`[DBG] handleShareSatellite SUCCESS — link: ${url.slice(0, 80)}...`)
+      } else {
+        res.text().then(t => console.log(`[DBG] handleShareSatellite FAILED: ${res.status} body=${t}`))
       }
-    }).catch(() => {})
+    }).catch(err => { console.log(`[DBG] handleShareSatellite FETCH ERROR:`, err) })
   }
 
   function handleRevokeSatellite(id: string) {
     const node = cs.nodes.find(n => n.id === id)
+    console.log(`[DBG] handleRevokeSatellite id=${id} sessionId=${node?.sessionId}`)
     if (!node?.sessionId) return
     fetch(`${HTTP_URL}/satellite/disable`, {
       method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ sessionId: node.sessionId }),
-    }).then(() => replaceNode(id, { satellitePassword: null })).catch(() => {})
+    }).then(res => { console.log(`[DBG] handleRevokeSatellite response: ${res.status}`); replaceNode(id, { satellitePassword: null }) }).catch(err => console.log('[DBG] handleRevokeSatellite ERROR:', err))
   }
 
   function handleShareFishtank(id: string) {
     const node = cs.nodes.find(n => n.id === id)
-    if (!node?.sessionId) return
+    console.log(`[DBG] handleShareFishtank id=${id} sessionId=${node?.sessionId} currentSatPwd=${node?.satellitePassword ? 'SET' : 'null'} currentFishPwd=${node?.fishtankPassword ? 'SET' : 'null'}`)
+    if (!node?.sessionId) { console.log('[DBG] handleShareFishtank ABORTED: no sessionId'); return }
     const buf = new Uint8Array(32)
     crypto.getRandomValues(buf)
     const password = Array.from(buf, b => b.toString(16).padStart(2, '0')).join('')
+    const url = `${window.location.origin}/?fishtank=${encodeURIComponent(node.sessionId!)}&password=${encodeURIComponent(password)}`
+    console.log(`[DBG] handleShareFishtank POSTing /fishtank/enable sessionId=${node.sessionId} newPwd=${password.slice(0, 8)}...`)
     fetch(`${HTTP_URL}/fishtank/enable`, {
       method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ sessionId: node.sessionId, password }),
     }).then(res => {
+      console.log(`[DBG] handleShareFishtank response: ${res.status} ${res.statusText}`)
       if (res.ok) {
         replaceNode(id, { fishtankPassword: password })
-        clipboardWrite(`${window.location.origin}/?fishtank=${encodeURIComponent(node.sessionId!)}&password=${encodeURIComponent(password)}`)
+        clipboardWrite(url)
+        console.log(`[DBG] handleShareFishtank SUCCESS — link: ${url.slice(0, 80)}...`)
+      } else {
+        res.text().then(t => console.log(`[DBG] handleShareFishtank FAILED: ${res.status} body=${t}`))
       }
-    }).catch(() => {})
+    }).catch(err => { console.log(`[DBG] handleShareFishtank FETCH ERROR:`, err) })
   }
 
   function handleRevokeFishtank(id: string) {
     const node = cs.nodes.find(n => n.id === id)
+    console.log(`[DBG] handleRevokeFishtank id=${id} sessionId=${node?.sessionId}`)
     if (!node?.sessionId) return
     fetch(`${HTTP_URL}/fishtank/disable`, {
       method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ sessionId: node.sessionId }),
-    }).then(() => replaceNode(id, { fishtankPassword: null })).catch(() => {})
+    }).then(res => { console.log(`[DBG] handleRevokeFishtank response: ${res.status}`); replaceNode(id, { fishtankPassword: null }) }).catch(err => console.log('[DBG] handleRevokeFishtank ERROR:', err))
   }
 
   function handleProgramMacro(id: string) {

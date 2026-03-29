@@ -12,6 +12,8 @@
   const fishtankSessionId = satParams.get('fishtank')
   const fishtankPassword = satParams.get('password') || undefined
 
+  console.log('[DBG] App.svelte URL parse:', { satSessionId, satPassword: satPassword ? 'SET' : 'none', fishtankSessionId, fishtankPassword: fishtankPassword ? 'SET' : 'none', rawSearch: window.location.search })
+
   let authed = $state(false)
   let authChecked = $state(false)
 

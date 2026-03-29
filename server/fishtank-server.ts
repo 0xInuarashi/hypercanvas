@@ -114,8 +114,10 @@ function handleRelayMessage(msg: Record<string, unknown>) {
 
   if (msg.type === 'session:add') {
     const existing = sessions.get(sessionId)
+    console.log(`[DBG] fish relay session:add sessionId=${sessionId} existing=${!!existing} pwd=${(msg.password as string || '').slice(0, 8)}...`)
     if (existing) {
       // Update password if session already exists
+      console.log(`[DBG] fish relay session:add UPDATING existing password (viewers=${existing.viewers.size})`)
       existing.password = msg.password as string
       return
     }
@@ -135,11 +137,13 @@ function handleRelayMessage(msg: Record<string, unknown>) {
       }
     }
     sessions.set(sessionId, session)
+    console.log(`[DBG] fish relay session:add CREATED new session (scrollback=${session.scrollback.length} chunks)`)
     return
   }
 
   if (msg.type === 'session:remove') {
     const session = sessions.get(sessionId)
+    console.log(`[DBG] fish relay session:remove sessionId=${sessionId} exists=${!!session} viewers=${session?.viewers.size}`)
     if (!session) return
     for (const v of session.viewers) {
       if (v.readyState === 1) v.close(1000, 'Session ended')
@@ -196,7 +200,9 @@ const server = Bun.serve<WsData>({
         const sessionId = (body as Record<string, string>).sessionId || ''
         const password = (body as Record<string, string>).password || ''
         const session = sessions.get(sessionId)
-        if (session && timingSafeCompare(session.password, password)) {
+        const pwdMatch = session ? timingSafeCompare(session.password, password) : false
+        console.log(`[DBG] fish /fishtank/check sessionId=${sessionId} sessionExists=${!!session} pwdMatch=${pwdMatch} totalSessions=${sessions.size}`)
+        if (session && pwdMatch) {
           return json({ ok: true })
         }
         return json({ error: 'Unauthorized' }, 401)
@@ -220,9 +226,12 @@ const server = Bun.serve<WsData>({
       const password = url.searchParams.get('password')
       if (sessionId && password) {
         const session = sessions.get(sessionId)
-        if (session && timingSafeCompare(session.password, password)) {
+        const pwdMatch = session ? timingSafeCompare(session.password, password) : false
+        console.log(`[DBG] fish WS upgrade viewer: sessionId=${sessionId} sessionExists=${!!session} pwdMatch=${pwdMatch}`)
+        if (session && pwdMatch) {
           if (server.upgrade(req, { data: { mode: 'viewer' as const, sessionId } })) return
         }
+        console.log('[DBG] fish WS upgrade viewer REJECTED')
         return json({ error: 'Unauthorized' }, 401)
       }
 
@@ -236,6 +245,7 @@ const server = Bun.serve<WsData>({
     open(ws: ServerWebSocket<WsData>) {
       if (ws.data.mode === 'viewer') {
         const session = sessions.get(ws.data.sessionId!)
+        console.log(`[DBG] fish WS open viewer: sessionId=${ws.data.sessionId} sessionExists=${!!session} scrollback=${session?.scrollback.length}`)
         if (!session) { ws.close(1008, 'Session not found'); return }
         session.viewers.add(ws)
         // Replay scrollback
@@ -245,7 +255,7 @@ const server = Bun.serve<WsData>({
         ws.send(JSON.stringify({ type: 'fishtank:connected', sessionId: session.id }))
       }
       if (ws.data.mode === 'relay') {
-        // Nothing to do on relay open
+        console.log('[DBG] fish WS open relay')
       }
     },
 
@@ -264,8 +274,12 @@ const server = Bun.serve<WsData>({
 
     close(ws: ServerWebSocket<WsData>) {
       if (ws.data.mode === 'viewer' && ws.data.sessionId) {
+        console.log(`[DBG] fish WS close viewer: sessionId=${ws.data.sessionId}`)
         const session = sessions.get(ws.data.sessionId)
         if (session) session.viewers.delete(ws)
+      }
+      if (ws.data.mode === 'relay') {
+        console.log('[DBG] fish WS close relay')
       }
     },
   },

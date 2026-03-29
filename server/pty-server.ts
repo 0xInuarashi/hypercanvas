@@ -202,12 +202,15 @@ function ensureFishtankServer() {
 function connectFishtankRelay() {
   if (!fishtankRelaySecret) return
   if (fishtankRelayWs?.readyState === WebSocket.OPEN) return
+  console.log(`[DBG] srv connectFishtankRelay connecting to port=${FISHTANK_PORT}`)
   const ws = new WebSocket(`ws://127.0.0.1:${FISHTANK_PORT}/ws?relay=${encodeURIComponent(fishtankRelaySecret)}`)
   ws.onopen = () => {
+    console.log('[DBG] srv fishtank relay CONNECTED')
     fishtankRelayWs = ws
     // Re-register all fishtank sessions on reconnect (e.g. after PTY server restart)
     for (const session of daemonSessions.values()) {
       if (session.fishtankPassword) {
+        console.log(`[DBG] srv fishtank relay re-register session=${session.id}`)
         fishtankRelaySend({
           type: 'session:add',
           sessionId: session.id,
@@ -218,6 +221,7 @@ function connectFishtankRelay() {
     }
   }
   ws.onclose = () => {
+    console.log('[DBG] srv fishtank relay CLOSED')
     fishtankRelayWs = null
     // Reconnect if the fishtank server is still running
     if (fishtankProc && isProcessRunning(fishtankProc.pid)) {
@@ -228,8 +232,10 @@ function connectFishtankRelay() {
 }
 
 function fishtankRelaySend(msg: object) {
-  if (fishtankRelayWs?.readyState === WebSocket.OPEN) {
-    fishtankRelayWs.send(JSON.stringify(msg))
+  const connected = fishtankRelayWs?.readyState === WebSocket.OPEN
+  console.log(`[DBG] srv fishtankRelaySend type=${(msg as any).type} sessionId=${(msg as any).sessionId} relayConnected=${connected}`)
+  if (connected) {
+    fishtankRelayWs!.send(JSON.stringify(msg))
   }
 }
 
@@ -680,6 +686,9 @@ function handleDaemonMessage(ws: ServerWebSocket<WsData>, parsed: Record<string,
 
   if (parsed.type === 'daemon:create') {
     const command = (parsed.command as string | undefined) || ''
+    const previousSessionId = parsed.previousSessionId as string | undefined
+    const restoredSatPassword = parsed.restoredSatPassword as string | undefined
+    const restoredFishPassword = parsed.restoredFishPassword as string | undefined
     const session: DaemonSession = {
       id: randomUUID(),
       command,
@@ -695,22 +704,51 @@ function handleDaemonMessage(ws: ServerWebSocket<WsData>, parsed: Record<string,
     }
     spawnDaemon(session)
     daemonSessions.set(session.id, session)
-    ws.send(JSON.stringify({ type: 'daemon:created', sessionId: session.id, status: session.status }))
+    console.log(`[DBG] srv daemon:create newId=${session.id} previousSessionId=${previousSessionId} restoredSatPwd=${restoredSatPassword ? 'SET' : 'null'} restoredFishPwd=${restoredFishPassword ? 'SET' : 'null'} status=${session.status}`)
+    // Transfer satellite from previous session if this is a restart
+    if (restoredSatPassword) {
+      console.log(`[DBG] srv daemon:create RESTORING satellite newSession=${session.id}`)
+      session.satellitePassword = restoredSatPassword
+    }
+    // Transfer fishtank from previous session if this is a restart
+    if (restoredFishPassword) {
+      console.log(`[DBG] srv daemon:create RESTORING fishtank newSession=${session.id}`)
+      session.fishtankPassword = restoredFishPassword
+      ensureFishtankServer()
+      setTimeout(() => {
+        fishtankRelaySend({
+          type: 'session:add',
+          sessionId: session.id,
+          password: restoredFishPassword,
+          scrollback: session.scrollback,
+        })
+      }, 800)
+    }
+    ws.send(JSON.stringify({
+      type: 'daemon:created',
+      sessionId: session.id,
+      status: session.status,
+      restoredSatPassword: session.satellitePassword ?? undefined,
+      restoredFishPassword: session.fishtankPassword ?? undefined,
+    }))
     return
   }
 
   if (!sessionId) {
+    console.log(`[DBG] srv daemon:error Missing sessionId for type=${parsed.type}`)
     ws.send(JSON.stringify({ type: 'daemon:error', message: 'Missing sessionId' }))
     return
   }
 
   const session = daemonSessions.get(sessionId)
   if (!session) {
+    console.log(`[DBG] srv daemon:error Session not found id=${sessionId}`)
     ws.send(JSON.stringify({ type: 'daemon:error', message: 'Session not found' }))
     return
   }
 
   if (parsed.type === 'daemon:attach') {
+    console.log(`[DBG] srv daemon:attach id=${sessionId} status=${session.status} satPwd=${session.satellitePassword ? 'SET' : 'null'} fishPwd=${session.fishtankPassword ? 'SET' : 'null'} clients=${session.clients.size}`)
     session.clients.add(ws)
     for (const chunk of session.scrollback) {
       ws.send(JSON.stringify({ type: 'output', data: chunk }))
@@ -1083,9 +1121,12 @@ const server = Bun.serve<WsData>({
 
       if (satId && satPwd) {
         const session = daemonSessions.get(satId)
-        if (session?.satellitePassword && timingSafeCompare(session.satellitePassword, satPwd)) {
+        const pwdMatch = session?.satellitePassword ? timingSafeCompare(session.satellitePassword, satPwd) : false
+        console.log(`[DBG] srv WS upgrade satellite: sessionId=${satId} sessionExists=${!!session} hasSatPwd=${!!session?.satellitePassword} pwdMatch=${pwdMatch}`)
+        if (session?.satellitePassword && pwdMatch) {
           if (server.upgrade(req, { data: { mode: 'satellite' as const, ephemeralProc: null, daemonSessionId: null, satSessionId: satId, lspLanguage: null } })) return
         }
+        console.log(`[DBG] srv WS upgrade satellite REJECTED`)
         return json({ error: 'Unauthorized' }, 401)
       }
 
@@ -1117,7 +1158,9 @@ const server = Bun.serve<WsData>({
         const sessionId = body.sessionId || ''
         const password = body.password || ''
         const session = daemonSessions.get(sessionId)
-        if (session?.satellitePassword && timingSafeCompare(session.satellitePassword, password)) {
+        const pwdMatch = session?.satellitePassword ? timingSafeCompare(session.satellitePassword, password) : false
+        console.log(`[DBG] srv /satellite/check sessionId=${sessionId} sessionExists=${!!session} hasSatPwd=${!!session?.satellitePassword} pwdMatch=${pwdMatch}`)
+        if (session?.satellitePassword && pwdMatch) {
           return json({ ok: true, status: session.status })
         }
         return json({ error: 'Unauthorized' }, 401)
@@ -1477,11 +1520,14 @@ const server = Bun.serve<WsData>({
         const password = (body.password as string || '').trim()
         if (!password) return json({ error: 'Missing password' }, 400)
         const session = daemonSessions.get(body.sessionId)
+        console.log(`[DBG] srv /satellite/enable sessionId=${body.sessionId} sessionExists=${!!session} currentSatPwd=${session?.satellitePassword ? 'SET' : 'null'} currentFishPwd=${session?.fishtankPassword ? 'SET' : 'null'} newPwd=${password.slice(0, 8)}...`)
         if (!session) return json({ error: 'Session not found' }, 404)
-        if (session.fishtankPassword) return json({ error: 'Disable fishtank first' }, 409)
+        if (session.fishtankPassword) { console.log('[DBG] srv /satellite/enable BLOCKED: fishtank active'); return json({ error: 'Disable fishtank first' }, 409) }
         session.satellitePassword = password
+        console.log(`[DBG] srv /satellite/enable SUCCESS`)
         return json({ ok: true })
       } catch (err) {
+        console.log(`[DBG] srv /satellite/enable ERROR:`, err)
         return json({ error: err instanceof Error ? err.message : 'Failed' }, 500)
       }
     }
@@ -1490,10 +1536,12 @@ const server = Bun.serve<WsData>({
       try {
         const body = await req.json()
         const session = daemonSessions.get(body.sessionId)
+        console.log(`[DBG] srv /satellite/disable sessionId=${body.sessionId} sessionExists=${!!session} satPwd=${session?.satellitePassword ? 'SET' : 'null'}`)
         if (!session) return json({ error: 'Session not found' }, 404)
         session.satellitePassword = null
         for (const c of session.clients) {
           if (c.data.mode === 'satellite' && c.readyState === 1) {
+            console.log('[DBG] srv /satellite/disable closing satellite client')
             c.close(1000, 'Satellite revoked')
           }
         }
@@ -1511,12 +1559,14 @@ const server = Bun.serve<WsData>({
         const password = (body.password as string || '').trim()
         if (!password) return json({ error: 'Missing password' }, 400)
         const session = daemonSessions.get(body.sessionId)
+        console.log(`[DBG] srv /fishtank/enable sessionId=${body.sessionId} sessionExists=${!!session} currentSatPwd=${session?.satellitePassword ? 'SET' : 'null'} currentFishPwd=${session?.fishtankPassword ? 'SET' : 'null'} newPwd=${password.slice(0, 8)}...`)
         if (!session) return json({ error: 'Session not found' }, 404)
-        if (session.satellitePassword) return json({ error: 'Disable satellite first' }, 409)
+        if (session.satellitePassword) { console.log('[DBG] srv /fishtank/enable BLOCKED: satellite active'); return json({ error: 'Disable satellite first' }, 409) }
         session.fishtankPassword = password
         ensureFishtankServer()
         // Wait briefly for relay to connect, then register session
         setTimeout(() => {
+          console.log(`[DBG] srv /fishtank/enable relay session:add sessionId=${session.id}`)
           fishtankRelaySend({
             type: 'session:add',
             sessionId: session.id,
@@ -1524,8 +1574,10 @@ const server = Bun.serve<WsData>({
             scrollback: session.scrollback,
           })
         }, 800)
+        console.log(`[DBG] srv /fishtank/enable SUCCESS`)
         return json({ ok: true, port: FISHTANK_PORT })
       } catch (err) {
+        console.log(`[DBG] srv /fishtank/enable ERROR:`, err)
         return json({ error: err instanceof Error ? err.message : 'Failed' }, 500)
       }
     }
@@ -1534,6 +1586,7 @@ const server = Bun.serve<WsData>({
       try {
         const body = await req.json()
         const session = daemonSessions.get(body.sessionId)
+        console.log(`[DBG] srv /fishtank/disable sessionId=${body.sessionId} sessionExists=${!!session} fishPwd=${session?.fishtankPassword ? 'SET' : 'null'}`)
         if (!session) return json({ error: 'Session not found' }, 404)
         session.fishtankPassword = null
         fishtankRelaySend({ type: 'session:remove', sessionId: session.id })
@@ -1669,7 +1722,8 @@ const server = Bun.serve<WsData>({
     open(ws: ServerWebSocket<WsData>) {
       if (ws.data.mode === 'satellite') {
         const session = daemonSessions.get(ws.data.satSessionId!)
-        if (!session?.satellitePassword) { ws.close(1008, 'Unauthorized'); return }
+        console.log(`[DBG] srv WS open satellite: sessionId=${ws.data.satSessionId} sessionExists=${!!session} hasSatPwd=${!!session?.satellitePassword}`)
+        if (!session?.satellitePassword) { console.log('[DBG] srv WS open satellite REJECTED: no password'); ws.close(1008, 'Unauthorized'); return }
         session.clients.add(ws)
         for (const chunk of session.scrollback) {
           ws.send(JSON.stringify({ type: 'output', data: chunk }))
@@ -1763,11 +1817,11 @@ const server = Bun.serve<WsData>({
       }
       if (ws.data.mode === 'daemon' && ws.data.daemonSessionId) {
         const session = daemonSessions.get(ws.data.daemonSessionId)
-        if (session) session.clients.delete(ws)
+        if (session) { console.log(`[DBG] srv WS close daemon: sessionId=${ws.data.daemonSessionId} remainingClients=${session.clients.size - 1} satPwd=${session.satellitePassword ? 'SET' : 'null'} fishPwd=${session.fishtankPassword ? 'SET' : 'null'}`); session.clients.delete(ws) }
       }
       if (ws.data.mode === 'satellite' && ws.data.satSessionId) {
         const session = daemonSessions.get(ws.data.satSessionId)
-        if (session) session.clients.delete(ws)
+        if (session) { console.log(`[DBG] srv WS close satellite: sessionId=${ws.data.satSessionId} remainingClients=${session.clients.size - 1}`); session.clients.delete(ws) }
       }
       if (ws.data.mode === 'lsp' && ws.data.lspLanguage) {
         const lspKey = ws.data.lspLanguage === 'tsx' || ws.data.lspLanguage === 'jsx' ? 'typescript' : ws.data.lspLanguage

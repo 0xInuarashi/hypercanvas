@@ -100,6 +100,7 @@
       </div>
     {/if}
     {#if menu.nodePersistent && menu.nodeSessionId}
+      {@const _dbg = console.log(`[DBG] ContextMenu share section: persistent=${menu.nodePersistent} sessionId=${menu.nodeSessionId} satPwd=${menu.nodeSatellitePassword ? 'SET' : 'null'} fishPwd=${menu.nodeFishtankPassword ? 'SET' : 'null'} → showing: ${menu.nodeSatellitePassword ? 'REVOKE_SAT' : menu.nodeFishtankPassword ? 'REVOKE_FISH' : 'SHARE_BOTH'}`)}
       {#if menu.nodeSatellitePassword}
         <button class="context-menu-item" onclick={() => { onRevokeSatellite(menu.targetId); onClose() }}>Revoke Satellite</button>
       {:else if menu.nodeFishtankPassword}

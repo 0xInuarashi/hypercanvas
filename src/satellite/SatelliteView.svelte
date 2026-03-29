@@ -44,6 +44,7 @@
   let wsRef: WebSocket | null = null
 
   async function validate(pwd: string) {
+    console.log(`[DBG] SatelliteView.validate sessionId=${sessionId} pwd=${pwd.slice(0, 8)}...`)
     loginChecking = true
     loginError = null
     try {
@@ -52,13 +53,18 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, password: pwd }),
       })
+      console.log(`[DBG] SatelliteView.validate response: ${res.status}`)
       if (res.ok) {
+        console.log('[DBG] SatelliteView.validate SUCCESS — authed')
         authedPassword = pwd
       } else {
+        const body = await res.text()
+        console.log(`[DBG] SatelliteView.validate FAILED: ${res.status} body=${body}`)
         loginError = 'Wrong password'
         loginPassword = ''
       }
-    } catch {
+    } catch (err) {
+      console.log('[DBG] SatelliteView.validate FETCH ERROR:', err)
       fatalError = 'Cannot reach server'
     } finally {
       loginChecking = false
@@ -68,6 +74,7 @@
   // Auto-validate if initialPassword provided
   $effect(() => {
     if (initialPassword && !loginTried) {
+      console.log(`[DBG] SatelliteView auto-validate triggered sessionId=${sessionId}`)
       loginTried = true
       validate(initialPassword)
     }
@@ -106,28 +113,30 @@
     let reconnectAttempts = 0
 
     function connect() {
+      console.log(`[DBG] SatelliteView.connect() sessionId=${sessionId} attempt=${reconnectAttempts}`)
       termStatus = 'connecting'
       const ws = new WebSocket(getSatelliteWsUrl(sessionId, authedPassword!))
       wsRef = ws
 
-      ws.onopen = () => { termStatus = 'connected'; reconnectDelay = 1000; reconnectAttempts = 0 }
+      ws.onopen = () => { console.log('[DBG] SatelliteView WS open'); termStatus = 'connected'; reconnectDelay = 1000; reconnectAttempts = 0 }
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
           if (msg.type === 'output') term.write(msg.data)
-          else if (msg.type === 'daemon:attached') termStatus = 'connected'
+          else if (msg.type === 'daemon:attached') { console.log(`[DBG] SatelliteView daemon:attached status=${msg.status}`); termStatus = 'connected' }
         } catch {}
       }
-      ws.onclose = () => {
+      ws.onclose = (e) => {
+        console.log(`[DBG] SatelliteView WS close code=${e.code} reason=${e.reason} attempts=${reconnectAttempts}`)
         wsRef = null; reconnectAttempts++
-        if (reconnectAttempts >= 10) { revoked = true; return }
+        if (reconnectAttempts >= 10) { console.log('[DBG] SatelliteView REVOKED after 10 attempts'); revoked = true; return }
         termStatus = 'disconnected'
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null; connect()
           reconnectDelay = Math.min(reconnectDelay * 2, 10000)
         }, reconnectDelay)
       }
-      ws.onerror = () => {}
+      ws.onerror = () => { console.log('[DBG] SatelliteView WS error') }
     }
 
     connect()
