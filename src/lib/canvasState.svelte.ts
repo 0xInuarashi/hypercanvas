@@ -192,6 +192,10 @@ export function addNode(type: NodeType, x: number, y: number, w?: number, h?: nu
 let fullscreen = $state(false)
 export const fullscreenState = { get active() { return fullscreen }, set active(v: boolean) { fullscreen = v } }
 
+// HUD visibility — toggled with Ctrl+H
+let hudHidden = $state(false)
+export const hudState = { get hidden() { return hudHidden }, toggle() { hudHidden = !hudHidden } }
+
 export function moveNode(id: string, x: number, y: number) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) }
 export function resizeNode(id: string, x: number, y: number, width: number, height: number) { cs.nodes = cs.nodes.map((n) => (n.id === id ? { ...n, x, y, width, height } : n)) }
 

@@ -4,7 +4,7 @@
   import HistoryPanel from './HistoryPanel.svelte'
   import SettingsPanel from './SettingsPanel.svelte'
   import ScriptApprovalModal from './ScriptApprovalModal.svelte'
-  import { cs, persistState, addNode, setNodeSizesGetter, saveSnap, recallSnap, fullscreenState, initCloud } from '../lib/canvasState.svelte'
+  import { cs, persistState, addNode, setNodeSizesGetter, saveSnap, recallSnap, fullscreenState, hudState, initCloud } from '../lib/canvasState.svelte'
   import { undo, redo } from '../lib/historyManager.svelte'
   import { ss, setShowSettings, getNodeSizes } from '../lib/settingsState.svelte'
   import { parseUrlScript } from '../lib/urlScript'
@@ -37,6 +37,7 @@
     function onKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') { e.preventDefault(); hudState.toggle(); return }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo() }
       const digitMatch = e.code.match(/^Digit(\d)$/)
@@ -68,9 +69,9 @@
 
 <Canvas />
 
-{#if !fullscreenState.active}<Sidebar />{/if}
+{#if !fullscreenState.active && !hudState.hidden}<Sidebar />{/if}
 
-<div style="position:absolute;bottom:16px;left:16px;display:{fullscreenState.active ? 'none' : 'flex'};gap:8px;align-items:flex-end;z-index:10;">
+<div style="position:absolute;bottom:16px;left:16px;display:{fullscreenState.active || hudState.hidden ? 'none' : 'flex'};gap:8px;align-items:flex-end;z-index:10;">
   <button
     onclick={() => setShowSettings(true)}
     title="Settings"

@@ -5,7 +5,7 @@
     moveNode, resizeNode, addLink, deleteNode, deleteLink,
     updateNodeLabel, updateNodeScript, toggleNodeActive, replaceNode,
     addNode, setViewportActions, cancelPendingDestroys, clearActiveTool,
-    recallSnap, deleteSnap, fullscreenState,
+    recallSnap, deleteSnap, fullscreenState, hudState,
     pendingSatRestore,
   } from '../lib/canvasState.svelte'
   import { getNodeSizes, ss } from '../lib/settingsState.svelte'
@@ -568,7 +568,7 @@
 
 <!-- Bottom-right toolbar (outside viewport to avoid transform artifacts) -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div style="position:fixed;bottom:16px;right:16px;display:{fullscreenNodeId ? 'none' : 'flex'};gap:8px;z-index:10;align-items:flex-end;">
+<div style="position:fixed;bottom:16px;right:16px;display:{fullscreenNodeId || hudState.hidden ? 'none' : 'flex'};gap:8px;z-index:10;align-items:flex-end;">
   <WorkspaceTabs />
   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
     {#if snapSlots.length > 0}
