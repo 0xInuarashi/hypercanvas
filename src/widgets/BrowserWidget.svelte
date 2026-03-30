@@ -64,8 +64,24 @@
   let iframeEl: HTMLIFrameElement
   let containerEl: HTMLDivElement
   let mounted = true
+  let focused = $state(false)
+  let wrapperEl: HTMLDivElement
 
   onDestroy(() => { mounted = false })
+
+  // Unfocus when deactivated
+  $effect(() => { if (!active) focused = false })
+
+  // Click-outside unfocus
+  $effect(() => {
+    if (!focused) return
+    const handler = (e: PointerEvent) => {
+      if (e.button !== 0) return
+      if (wrapperEl && !wrapperEl.contains(e.target as Node)) focused = false
+    }
+    document.addEventListener('pointerdown', handler, true)
+    return () => document.removeEventListener('pointerdown', handler, true)
+  })
 
   // Track container size
   $effect(() => {
@@ -158,7 +174,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div style="display:flex;flex-direction:column;width:100%;height:100%;" onkeydown={(e) => e.stopPropagation()}>
+<div bind:this={wrapperEl} style="display:flex;flex-direction:column;width:100%;height:100%;" onkeydown={(e) => e.stopPropagation()}>
   <WidgetHeader icon="⊞">
     {#snippet label()}
       <span style="color:{active ? '#aaa' : '#666'}">Browser</span>
@@ -279,16 +295,28 @@
         <span style="font-size:24px;opacity:0.2;">⊞</span>
       </div>
     {:else if iframeSrc}
-      {#key refreshKey}
-      <iframe
-        bind:this={iframeEl}
-        src={iframeSrc}
-        onload={() => { loadingState = false }}
-        onerror={() => { loadingState = false; error = 'Failed to load' }}
-        title="Browser preview"
-        style="border:none;background:#0a0a0a;transform-origin:0 0;{isAuto ? 'width:100%;height:100%;' : `width:${resolvedW}px;height:${resolvedH}px;transform:scale(${scale});`}"
-      ></iframe>
-      {/key}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div style="width:100%;height:100%;position:relative;" onpointerdown={(e) => e.stopPropagation()}>
+        {#key refreshKey}
+        <iframe
+          bind:this={iframeEl}
+          src={iframeSrc}
+          onload={() => { loadingState = false }}
+          onerror={() => { loadingState = false; error = 'Failed to load' }}
+          title="Browser preview"
+          style="border:none;background:#0a0a0a;transform-origin:0 0;{isAuto ? 'width:100%;height:100%;' : `width:${resolvedW}px;height:${resolvedH}px;transform:scale(${scale});`}"
+        ></iframe>
+        {/key}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          style="position:absolute;inset:0;cursor:{focused ? 'default' : 'pointer'};pointer-events:{focused ? 'none' : 'auto'};"
+          onpointerdown={(e) => {
+            if (e.button !== 0) return
+            e.stopPropagation()
+            focused = true
+          }}
+        ></div>
+      </div>
     {:else}
       <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#555;font-size:12px;font-family:'JetBrains Mono','Fira Code',monospace;">
         <span style="font-size:24px;opacity:0.3;">⊞</span>
