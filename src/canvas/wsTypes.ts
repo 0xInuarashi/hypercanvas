@@ -11,11 +11,15 @@ export interface WsDaemonCreatedMsg {
   type: 'daemon:created'
   sessionId: string
   status: DaemonStatus
+  restoredSatPassword?: string | null
+  restoredFishPassword?: string | null
 }
 
 export interface WsDaemonAttachedMsg {
   type: 'daemon:attached'
+  sessionId?: string
   status: DaemonStatus
+  exitCode?: number
 }
 
 export interface WsDaemonStatusMsg {

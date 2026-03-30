@@ -19,7 +19,7 @@
     satellitePassword?: string | null
     fishtankPassword?: string | null
     nodeId: string
-    onSessionCreated?: (sessionId: string) => void
+    onSessionCreated?: (sessionId: string, restoredSatPwd?: string | null, restoredFishPwd?: string | null) => void
     onOpenBrowser?: (url: string) => void
     onTextContextMenu?: (text: string, e: MouseEvent) => void
   } = $props()
