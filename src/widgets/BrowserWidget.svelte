@@ -286,37 +286,32 @@
   {/if}
 
   <!-- Content area -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     bind:this={containerEl}
-    style="flex:1;overflow:hidden;position:relative;background:#0a0a0a;"
+    style="flex:1;overflow:hidden;position:relative;background:#0a0a0a;cursor:{active && iframeSrc && !focused ? 'pointer' : 'default'};"
+    onpointerdown={(e) => {
+      if (active && iframeSrc) {
+        e.stopPropagation()
+        focused = true
+      }
+    }}
   >
     {#if !active}
       <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#333;font-size:12px;font-family:'JetBrains Mono','Fira Code',monospace;">
         <span style="font-size:24px;opacity:0.2;">⊞</span>
       </div>
     {:else if iframeSrc}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div style="width:100%;height:100%;position:relative;" onpointerdown={(e) => e.stopPropagation()}>
-        {#key refreshKey}
-        <iframe
-          bind:this={iframeEl}
-          src={iframeSrc}
-          onload={() => { loadingState = false }}
-          onerror={() => { loadingState = false; error = 'Failed to load' }}
-          title="Browser preview"
-          style="border:none;background:#0a0a0a;transform-origin:0 0;{isAuto ? 'width:100%;height:100%;' : `width:${resolvedW}px;height:${resolvedH}px;transform:scale(${scale});`}"
-        ></iframe>
-        {/key}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          style="position:absolute;inset:0;cursor:{focused ? 'default' : 'pointer'};pointer-events:{focused ? 'none' : 'auto'};"
-          onpointerdown={(e) => {
-            if (e.button !== 0) return
-            e.stopPropagation()
-            focused = true
-          }}
-        ></div>
-      </div>
+      {#key refreshKey}
+      <iframe
+        bind:this={iframeEl}
+        src={iframeSrc}
+        onload={() => { loadingState = false }}
+        onerror={() => { loadingState = false; error = 'Failed to load' }}
+        title="Browser preview"
+        style="border:none;background:#0a0a0a;transform-origin:0 0;pointer-events:{focused ? 'auto' : 'none'};{isAuto ? 'width:100%;height:100%;' : `width:${resolvedW}px;height:${resolvedH}px;transform:scale(${scale});`}"
+      ></iframe>
+      {/key}
     {:else}
       <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#555;font-size:12px;font-family:'JetBrains Mono','Fira Code',monospace;">
         <span style="font-size:24px;opacity:0.3;">⊞</span>
