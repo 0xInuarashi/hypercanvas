@@ -777,6 +777,17 @@ function handleDaemonMessage(ws: ServerWebSocket<WsData>, parsed: Record<string,
   }
 
   if (parsed.type === 'daemon:destroy') {
+    if (session.fishtankPassword) {
+      fishtankRelaySend({ type: 'session:remove', sessionId })
+      session.fishtankPassword = null
+      if (!hasFishtankSessions()) setTimeout(killFishtankServer, 500)
+    }
+    if (session.satellitePassword) {
+      for (const c of session.clients) {
+        if (c.data.mode === 'satellite' && c.readyState === 1) c.close(1000, 'Session destroyed')
+      }
+      session.satellitePassword = null
+    }
     if (session.proc) killProcessTree(session.proc.pid)
     daemonSessions.delete(sessionId)
     broadcastDaemon(session, { type: 'daemon:status', status: 'stopped', exitCode: null })
@@ -1506,6 +1517,17 @@ const server = Bun.serve<WsData>({
       const body = await req.json()
       const session = daemonSessions.get(body.sessionId)
       if (session) {
+        if (session.fishtankPassword) {
+          fishtankRelaySend({ type: 'session:remove', sessionId: body.sessionId })
+          session.fishtankPassword = null
+          if (!hasFishtankSessions()) setTimeout(killFishtankServer, 500)
+        }
+        if (session.satellitePassword) {
+          for (const c of session.clients) {
+            if (c.data.mode === 'satellite' && c.readyState === 1) c.close(1000, 'Session destroyed')
+          }
+          session.satellitePassword = null
+        }
         if (session.proc) killProcessTree(session.proc.pid)
         daemonSessions.delete(body.sessionId)
       }

@@ -198,12 +198,19 @@ export function resizeNode(id: string, x: number, y: number, width: number, heig
 export function deleteNode(id: string) {
   const node = cs.nodes.find((n) => n.id === id)
   if (node?.sessionId && node.type === 'console') {
-    if (node.type === 'console' && node.persistent) {
-      const sessionId = node.sessionId
-      const timer = setTimeout(() => { pendingDestroys.delete(sessionId); fetch(`${HTTP_URL}/daemon/destroy`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId }) }).catch((err) => console.warn('daemon destroy failed:', err)) }, 5000)
+    const sessionId = node.sessionId
+    if (node.persistent) {
+      const timer = setTimeout(() => {
+        pendingDestroys.delete(sessionId)
+        if (node.satellitePassword) fetch(`${HTTP_URL}/satellite/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId }) }).catch(() => {})
+        if (node.fishtankPassword) fetch(`${HTTP_URL}/fishtank/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId }) }).catch(() => {})
+        fetch(`${HTTP_URL}/daemon/destroy`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId }) }).catch((err) => console.warn('daemon destroy failed:', err))
+      }, 5000)
       pendingDestroys.set(sessionId, timer)
     } else {
-      fetch(`${HTTP_URL}/daemon/destroy`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId: node.sessionId }) }).catch((err) => console.warn('daemon destroy failed:', err))
+      if (node.satellitePassword) fetch(`${HTTP_URL}/satellite/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId }) }).catch(() => {})
+      if (node.fishtankPassword) fetch(`${HTTP_URL}/fishtank/disable`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId }) }).catch(() => {})
+      fetch(`${HTTP_URL}/daemon/destroy`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ sessionId }) }).catch((err) => console.warn('daemon destroy failed:', err))
     }
   }
   cs.nodes = cs.nodes.filter((n) => n.id !== id)
