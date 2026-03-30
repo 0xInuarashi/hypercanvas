@@ -227,7 +227,7 @@
 
     t.onSelectionChange(() => {
       const sel = t.getSelection()
-      if (sel) clipboardWrite(sel)
+      if (sel) clipboardWrite(sel.split('\n').map(l => l.trimEnd()).join('\n'))
     })
 
     // Preserve selection on scroll: xterm clears selection on wheel events.
@@ -253,7 +253,7 @@
       e.stopPropagation()
       clipboardRead().then((text) => {
         if (text && ws?.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'input', data: text }))
+          ws.send(JSON.stringify({ type: 'input', data: '\x1b[200~' + text + '\x1b[201~' }))
         }
       })
     }
