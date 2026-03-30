@@ -31,6 +31,8 @@
   let cloudSaving = $state(false)
   let cloudPrompt = $state(false)
   let updateStatus = $state<string | null>(null)
+  let dlBytesReceived = $state(0)
+  let dlBytesTotal = $state(0)
 
   $effect(() => {
     if (category === 'updates' && !latestVersion && !checking) {
@@ -97,8 +99,12 @@
         if (resp.ok) {
           const data = await resp.json()
           if (data.status === 'downloading') {
-            updateStatus = 'Downloading...'
+            dlBytesReceived = data.bytesReceived || 0
+            dlBytesTotal = data.bytesTotal || 0
+            updateStatus = data.detail || 'Downloading...'
           } else if (data.status === 'installing') {
+            dlBytesReceived = 0
+            dlBytesTotal = 0
             updateStatus = data.detail || 'Installing...'
           } else if (data.status === 'restarting') {
             updateStatus = 'Restarting server...'
@@ -432,6 +438,15 @@
               </button>
             {/if}
           </div>
+          {#if updating && dlBytesTotal > 0}
+            <div class="settings-update-progress">
+              <div class="settings-update-progress-bar" style="width:{Math.round(dlBytesReceived / dlBytesTotal * 100)}%"></div>
+            </div>
+          {:else if updating && dlBytesReceived > 0 && dlBytesTotal === 0}
+            <div class="settings-update-progress">
+              <div class="settings-update-progress-bar indeterminate"></div>
+            </div>
+          {/if}
           {#if updateStatus}
             <div class="settings-update-status">{updateStatus}</div>
           {/if}

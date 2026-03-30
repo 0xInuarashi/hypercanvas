@@ -1066,28 +1066,52 @@ function satCheckRateLimited(ip: string): boolean {
 // Background update
 // ---------------------------------------------------------------------------
 
-let updateProgress: { status: 'idle' | 'downloading' | 'installing' | 'restarting' | 'error'; detail: string; error: string | null } = { status: 'idle', detail: '', error: null }
+let updateProgress: { status: 'idle' | 'downloading' | 'installing' | 'restarting' | 'error'; detail: string; error: string | null; bytesReceived: number; bytesTotal: number } = { status: 'idle', detail: '', error: null, bytesReceived: 0, bytesTotal: 0 }
 
 async function runUpdate(version: string, tarballUrl: string) {
   try {
-    // Download
-    updateProgress = { status: 'downloading', detail: 'Downloading tarball...', error: null }
+    // Download with progress
+    updateProgress = { status: 'downloading', detail: 'Connecting...', error: null, bytesReceived: 0, bytesTotal: 0 }
     const tmpPath = `/tmp/hypercanvas-${version}.tar.gz`
     const tmpExtract = `/tmp/hypercanvas-${version}`
-    const dlResp = await fetch(tarballUrl)
-    if (!dlResp.ok) { updateProgress = { status: 'error', detail: '', error: `Download failed: ${dlResp.status}` }; return }
-    const buf = await dlResp.arrayBuffer()
+    const dlResp = await fetch(tarballUrl, {
+      redirect: 'follow',
+      headers: { 'User-Agent': 'Hypercanvas-Updater/1.0' },
+      signal: AbortSignal.timeout(120_000),
+    })
+    if (!dlResp.ok) { updateProgress = { status: 'error', detail: '', error: `Download failed: ${dlResp.status}`, bytesReceived: 0, bytesTotal: 0 }; return }
+    const total = parseInt(dlResp.headers.get('content-length') || '0', 10)
+    updateProgress.bytesTotal = total
+    const chunks: Uint8Array[] = []
+    let received = 0
+    let lastYield = 0
+    for await (const chunk of dlResp.body!) {
+      chunks.push(chunk)
+      received += chunk.length
+      updateProgress.bytesReceived = received
+      updateProgress.detail = total > 0
+        ? `${(received / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} MB`
+        : `${(received / 1048576).toFixed(1)} MB downloaded`
+      // Yield to event loop periodically so status polls can be served
+      if (received - lastYield > 512 * 1024) {
+        lastYield = received
+        await new Promise(r => setTimeout(r, 0))
+      }
+    }
+    const buf = new Uint8Array(received)
+    let offset = 0
+    for (const c of chunks) { buf.set(c, offset); offset += c.length }
     await Bun.write(tmpPath, buf)
 
     // Extract to temp dir first
-    updateProgress = { status: 'installing', detail: 'Extracting...', error: null }
+    updateProgress = { status: 'installing', detail: 'Extracting...', error: null, bytesReceived: 0, bytesTotal: 0 }
     execSync(`rm -rf ${JSON.stringify(tmpExtract)}`)
     execSync(`mkdir -p ${JSON.stringify(tmpExtract)}`)
     execSync(`tar -xzf ${JSON.stringify(tmpPath)} -C ${JSON.stringify(tmpExtract)}`)
     execSync(`rm -f ${JSON.stringify(tmpPath)}`)
 
     // Overwrite in-place: copy binary + dist + VERSION into INSTALL_ROOT
-    updateProgress = { status: 'installing', detail: 'Installing files...', error: null }
+    updateProgress = { status: 'installing', detail: 'Installing files...', error: null, bytesReceived: 0, bytesTotal: 0 }
     const newBinary = join(tmpExtract, 'hypercanvas')
     const newDist = join(tmpExtract, 'dist')
     const newVersion = join(tmpExtract, 'VERSION')
@@ -1106,10 +1130,10 @@ async function runUpdate(version: string, tarballUrl: string) {
     execSync(`rm -rf ${JSON.stringify(tmpExtract)}`)
 
     // Exit so systemd restarts with the new binary
-    updateProgress = { status: 'restarting', detail: 'Restarting server...', error: null }
+    updateProgress = { status: 'restarting', detail: 'Restarting server...', error: null, bytesReceived: 0, bytesTotal: 0 }
     setTimeout(() => process.exit(0), 1000)
   } catch (err) {
-    updateProgress = { status: 'error', detail: '', error: err instanceof Error ? err.message : 'Update failed' }
+    updateProgress = { status: 'error', detail: '', error: err instanceof Error ? err.message : 'Update failed', bytesReceived: 0, bytesTotal: 0 }
   }
 }
 
@@ -1668,7 +1692,7 @@ const server = Bun.serve<WsData>({
     }
 
     if (req.method === 'GET' && url.pathname === '/update/status') {
-      return json({ status: updateProgress.status, detail: updateProgress.detail, error: updateProgress.error })
+      return json({ status: updateProgress.status, detail: updateProgress.detail, error: updateProgress.error, bytesReceived: updateProgress.bytesReceived, bytesTotal: updateProgress.bytesTotal })
     }
 
     if (req.method === 'POST' && url.pathname === '/update') {
@@ -1682,7 +1706,7 @@ const server = Bun.serve<WsData>({
         }
 
         // Respond immediately, run update in background
-        updateProgress = { status: 'downloading', detail: 'Downloading tarball...', error: null }
+        updateProgress = { status: 'downloading', detail: 'Starting download...', error: null, bytesReceived: 0, bytesTotal: 0 }
         runUpdate(version, tarballUrl)
         return json({ ok: true, status: 'started' })
       } catch (err) {
