@@ -148,6 +148,19 @@
       if (wsRef?.readyState === WebSocket.OPEN) wsRef.send(JSON.stringify({ type: 'resize', cols, rows }))
     })
 
+    let prevTouchY = 0
+    function onContainerTouchMove(e: TouchEvent) {
+      if (e.touches.length === 1) {
+        e.preventDefault()
+        const delta = prevTouchY - e.touches[0].clientY
+        term.scrollLines(delta > 0 ? 1 : delta < 0 ? -1 : 0)
+      }
+      prevTouchY = e.touches[0]?.clientY ?? prevTouchY
+    }
+    function onContainerTouchStart(e: TouchEvent) {
+      prevTouchY = e.touches[0]?.clientY ?? 0
+    }
+
     function onViewportResize() {
       if (window.visualViewport && containerEl) {
         const root = containerEl.closest('.satellite-root') as HTMLElement | null
@@ -158,6 +171,8 @@
     const onWindowResize = () => fit.fit()
     window.visualViewport?.addEventListener('resize', onViewportResize)
     window.addEventListener('resize', onWindowResize)
+    containerEl.addEventListener('touchmove', onContainerTouchMove, { passive: false })
+    containerEl.addEventListener('touchstart', onContainerTouchStart, { passive: true })
 
     return () => {
       if (reconnectTimer) clearTimeout(reconnectTimer)
@@ -166,6 +181,8 @@
       term.dispose()
       window.visualViewport?.removeEventListener('resize', onViewportResize)
       window.removeEventListener('resize', onWindowResize)
+      containerEl.removeEventListener('touchmove', onContainerTouchMove)
+      containerEl.removeEventListener('touchstart', onContainerTouchStart)
       const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null
       if (meta) meta.content = origContent
     }

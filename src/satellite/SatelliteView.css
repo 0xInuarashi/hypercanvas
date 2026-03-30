@@ -36,7 +36,8 @@
 .satellite-terminal {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .satellite-toolbar {
