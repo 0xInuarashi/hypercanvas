@@ -1117,15 +1117,15 @@ async function runUpdate(version: string, tarballUrl: string) {
     const newVersion = join(tmpExtract, 'VERSION')
 
     if (existsSync(newBinary)) {
-      execSync(`cp -f ${JSON.stringify(newBinary)} ${JSON.stringify(join(INSTALL_ROOT, 'hypercanvas'))}`)
-      execSync(`chmod +x ${JSON.stringify(join(INSTALL_ROOT, 'hypercanvas'))}`)
+      execSync(`sudo cp -f ${JSON.stringify(newBinary)} ${JSON.stringify(join(INSTALL_ROOT, 'hypercanvas'))}`)
+      execSync(`sudo chmod +x ${JSON.stringify(join(INSTALL_ROOT, 'hypercanvas'))}`)
     }
     if (existsSync(newDist)) {
-      execSync(`rm -rf ${JSON.stringify(join(INSTALL_ROOT, 'dist'))}`)
-      execSync(`cp -rf ${JSON.stringify(newDist)} ${JSON.stringify(join(INSTALL_ROOT, 'dist'))}`)
+      execSync(`sudo rm -rf ${JSON.stringify(join(INSTALL_ROOT, 'dist'))}`)
+      execSync(`sudo cp -rf ${JSON.stringify(newDist)} ${JSON.stringify(join(INSTALL_ROOT, 'dist'))}`)
     }
     if (existsSync(newVersion)) {
-      execSync(`cp -f ${JSON.stringify(newVersion)} ${JSON.stringify(join(INSTALL_ROOT, 'VERSION'))}`)
+      execSync(`sudo cp -f ${JSON.stringify(newVersion)} ${JSON.stringify(join(INSTALL_ROOT, 'VERSION'))}`)
     }
     execSync(`rm -rf ${JSON.stringify(tmpExtract)}`)
 
